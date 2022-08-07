@@ -9,6 +9,8 @@ import numpy.random as npr
 import paddle.vision.transforms as transforms
 import paddle
 
+from utils.bbox import rbox_2_quad
+
 
 def init_seeds(seed=0):
     random.seed(seed)
@@ -47,6 +49,47 @@ def hyp_parse(hyp_path):
     return hyp
 
 
+def is_image(filename):
+    return any(filename.endswith(ext) for ext in [".bmp", ".png", ".jpg", ".jpeg", ".JPG"])
+
+
+def sort_corners(quads):
+    sorted_ = np.zeros(quads.shape, dtype=np.float32)
+    for i, corners in enumerate(quads):
+        corners = corners.reshape(4, 2)
+        centers = np.mean(corners, axis=0)
+        corners = corners - centers
+        cosine = corners[:, 0] / np.sqrt(corners[:, 0] ** 2 + corners[:, 1] ** 2)
+        cosine = np.minimum(np.maximum(cosine, -1.0), 1.0)
+        thetas = np.arccos(cosine) / np.pi * 180.0
+        indice = np.where(corners[:, 1] > 0)[0]
+        thetas[indice] = 360.0 - thetas[indice]
+        corners = corners + centers
+        corners = corners[thetas.argsort()[::-1], :]
+        corners = corners.reshape(8)
+        dx1, dy1 = (corners[4] - corners[0]), (corners[5] - corners[1])
+        dx2, dy2 = (corners[6] - corners[2]), (corners[7] - corners[3])
+        slope_1 = dy1 / dx1 if dx1 != 0 else np.iinfo(np.int32).max
+        slope_2 = dy2 / dx2 if dx2 != 0 else np.iinfo(np.int32).max
+        if slope_1 > slope_2:
+            if corners[0] < corners[4]:
+                first_idx = 0
+            elif corners[0] == corners[4]:
+                first_idx = 0 if corners[1] < corners[5] else 2
+            else:
+                first_idx = 2
+        else:
+            if corners[2] < corners[6]:
+                first_idx = 1
+            elif corners[2] == corners[6]:
+                first_idx = 1 if corners[3] < corners[7] else 3
+            else:
+                first_idx = 3
+        for j in range(4):
+            idx = (first_idx + j) % 4
+            sorted_[i, j*2] = corners[idx*2]
+            sorted_[i, j*2+1] = corners[idx*2+1]
+    return sorted_
 
 
 def rescale(im, target_size, max_size, keep_ratio, multiple=32):
@@ -117,4 +160,14 @@ class Reshape(object):
             ims = ims.unsqueeze(0)
         return ims
     
-    
+def plot_gt(img, bboxes, im_path, mode='xyxyxyxy'):
+    if not os.path.exists('temp'):
+        os.mkdir('temp')
+    if mode == 'xywha':
+        bboxes = rbox_2_quad(bboxes,mode=mode)
+    if mode == 'xyxya':
+        bboxes = rbox_2_quad(bboxes,mode=mode)
+    for box in bboxes:
+        img = cv2.polylines(cv2.UMat(img),[box.reshape(-1,2).astype(np.int32)],True,(0,0,255),2)
+        cv2.imwrite(os.path.join('temp','augment_%s' % (os.path.split(im_path)[1])),img)
+    print('Check augmentation results in `temp` folder!!!')

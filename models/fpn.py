@@ -64,8 +64,8 @@ class FPN(nn.Layer):
                 continue
             inner_block_module = nn.Conv2D(in_channels, out_channels, 1)
             layer_block_module = nn.Conv2D(out_channels, out_channels, 3, 1, 1)
-            self.add_module(inner_block, inner_block_module)
-            self.add_module(layer_block, layer_block_module)
+            self.add_sublayer(inner_block, inner_block_module)
+            self.add_sublayer(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
             

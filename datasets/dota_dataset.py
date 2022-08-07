@@ -2,14 +2,15 @@ import os
 import cv2
 import sys
 import numpy as np
-# import torch
-# import torch.utils.data as data
+from paddle.io import Dataset
 
-from utils.augment import *
-from utils.utils import plot_gt
-from utils.bbox import quad_2_rbox 
+from utils.augment import Augment, HSV, HorizontalFlip, VerticalFlip, \
+    Affine, Noise, Blur
+# from utils.utils import plot_gt
+from utils.bbox import mask_valid_boxes 
 
-class DOTADataset(data.Dataset):
+
+class DOTADataset(Dataset):
 
     def __init__(self,
                  dataset= None,  

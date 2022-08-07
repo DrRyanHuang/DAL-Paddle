@@ -20,6 +20,7 @@ def xyxy2xywh_a(query_boxes):
     out_boxes[:, 3] = query_boxes[:, 3] - query_boxes[:, 1]
     return out_boxes
 
+
 # cuda_overlaps
 class IntegratedLoss(nn.Layer):
     def __init__(self, alpha=0.25, gamma=2.0, func='smooth'):
@@ -42,7 +43,7 @@ class IntegratedLoss(nn.Layer):
         reg_losses = []
         batch_size = classifications.shape[0]
         alpha, beta, var = mining_param
-#         import ipdb;ipdb.set_trace()
+        # import ipdb;ipdb.set_trace()
         for j in range(batch_size):
             classification = classifications[j, :, :]
             regression = regressions[j, :, :]
@@ -78,9 +79,9 @@ class IntegratedLoss(nn.Layer):
                 das = False
                 md = sa
             
-            iou_max, iou_argmax = torch.max(md, dim=1)
+            iou_max, iou_argmax = paddle.max(md, axis=1)
            
-            positive_indices = torch.ge(iou_max, md_thres)
+            positive_indices = paddle.greater_equal(iou_max, md_thres)
 
              
             max_gt, argmax_gt = md.max(0) 
@@ -91,36 +92,42 @@ class IntegratedLoss(nn.Layer):
             # matching-weight
             if das:
                 pos = md[positive_indices]
-                pos_mask =  torch.ge(pos, md_thres)
+                pos_mask = paddle.greater_equal(pos, md_thres)
                 max_pos, armmax_pos = pos.max(0)
                 nt = md.shape[1]
                 for gt_idx in range(nt):
                     pos_mask[armmax_pos[gt_idx], gt_idx] = 1
-                comp = torch.where(pos_mask, (1 - max_pos).repeat(len(pos),1), pos)
+                comp = paddle.where(pos_mask, (1 - max_pos).repeat(len(pos),1), pos)
                 matching_weight = comp + pos
             # import ipdb; ipdb.set_trace(context = 15)
 
             # cls loss
-            cls_targets = (torch.ones(classification.shape) * -1).cuda()
-            cls_targets[torch.lt(iou_max, md_thres - 0.1), :] = 0
+            cls_targets = paddle.ones(classification.shape) * -1
+            cls_targets[paddle.less_than(iou_max, md_thres - 0.1), :] = 0
             num_positive_anchors = positive_indices.sum()
             assigned_annotations = bbox_annotation[iou_argmax, :]
             cls_targets[positive_indices, :] = 0
             cls_targets[positive_indices, assigned_annotations[positive_indices, -1].long()] = 1
-            alpha_factor = torch.ones(cls_targets.shape).cuda() * self.alpha
-            alpha_factor = paddle.where(torch.eq(cls_targets, 1.), alpha_factor, 1. - alpha_factor)
-            focal_weight = paddle.where(torch.eq(cls_targets, 1.), 1. - classification, classification)
-            focal_weight = alpha_factor * torch.pow(focal_weight, self.gamma)
-            bin_cross_entropy = -(cls_targets * torch.log(classification+1e-6) + (1.0 - cls_targets) * torch.log(1.0 - classification+1e-6))
+            alpha_factor = paddle.ones(cls_targets.shape) * self.alpha
+            alpha_factor = paddle.where(paddle.equal(cls_targets, 1.), alpha_factor, 1. - alpha_factor)
+            focal_weight = paddle.where(paddle.equal(cls_targets, 1.), 1. - classification, classification)
+            focal_weight = alpha_factor * paddle.pow(focal_weight, 
+                                                     self.gamma)
+            bin_cross_entropy = -(cls_targets * paddle.log(classification+1e-6) + \
+                                 (1.0 - cls_targets) * paddle.log(1.0 - classification+1e-6))
             if das :
-                soft_weight = (torch.zeros(classification.shape)).cuda()
-                soft_weight = paddle.where(torch.eq(cls_targets, 0.), torch.ones_like(cls_targets), soft_weight)
+                soft_weight = paddle.zeros(classification.shape)
+                soft_weight = paddle.where(paddle.equal(cls_targets, 0.), 
+                                           paddle.ones_like(cls_targets), 
+                                           soft_weight)
                 soft_weight[positive_indices, assigned_annotations[positive_indices, -1].long()] = (matching_weight.max(1)[0] + 1)
                 cls_loss = focal_weight * bin_cross_entropy * soft_weight
             else:
                 cls_loss = focal_weight * bin_cross_entropy 
-            cls_loss = paddle.where(torch.ne(cls_targets, -1.0), cls_loss, torch.zeros(cls_loss.shape).cuda())
-            cls_losses.append(cls_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
+            cls_loss = paddle.where(paddle.not_equal(cls_targets, -1.0), 
+                                    cls_loss, 
+                                    paddle.zeros(cls_loss.shape))
+            cls_losses.append(cls_loss.sum() / paddle.clip(num_positive_anchors.float(), min=1.0))
             # reg loss
             if positive_indices.sum() > 0:
                 all_rois = anchors[j, positive_indices, :]
@@ -132,13 +139,13 @@ class IntegratedLoss(nn.Layer):
                     reg_loss = self.criteron(regression[positive_indices, :], reg_targets)
                 reg_losses.append(reg_loss)
 
-                if not torch.isfinite(reg_loss) :
+                if not paddle.isfinite(reg_loss) :
                     import ipdb; ipdb.set_trace()
                 k=1
             else:
-                reg_losses.append(torch.tensor(0).float().cuda())
-        loss_cls = torch.stack(cls_losses).mean(dim=0, keepdim=True)
-        loss_reg = torch.stack(reg_losses).mean(dim=0, keepdim=True)
+                reg_losses.append(paddle.to_tensor(0.0))
+        loss_cls = paddle.stack(cls_losses).mean(axis=0, keepdim=True)
+        loss_reg = paddle.stack(reg_losses).mean(axis=0, keepdim=True)
         return loss_cls, loss_reg
 
     

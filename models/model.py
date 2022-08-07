@@ -1,6 +1,7 @@
-import torch
-import torch.nn as nn
-import torchvision.models as models
+import paddle
+import paddle.nn as nn
+import paddle.vision.models as models
+
 import math
 import cv2
 import os
@@ -18,7 +19,7 @@ from utils.bbox import clip_boxes, rbox_2_quad
 from utils.utils import hyp_parse
 
 
-class RetinaNet(nn.Module):
+class RetinaNet(nn.Layer):
     def __init__(self,backbone='res50',hyps=None):
         super(RetinaNet, self).__init__()
         self.num_classes  = int(hyps['num_classes']) + 1
@@ -87,8 +88,8 @@ class RetinaNet(nn.Module):
         original_anchors = self.anchor_generator(ims)   # (bs, num_all_achors, 5)
         anchors_list.append(original_anchors)
         features = self.fpn(self.ims_2_features(ims))
-        cls_score = torch.cat([self.cls_head(feature) for feature in features], dim=1)
-        bbox_pred = torch.cat([self.reg_head(feature) for feature in features], dim=1)
+        cls_score = paddle.concat([self.cls_head(feature) for feature in features], axis=1)
+        bbox_pred = paddle.concat([self.reg_head(feature) for feature in features], axis=1)
         bboxes = self.box_coder.decode(anchors_list[-1], bbox_pred, mode='xywht').detach()
 
         if self.training:
@@ -109,21 +110,21 @@ class RetinaNet(nn.Module):
             thresh = test_conf
         bboxes = self.box_coder.decode(anchors, bbox_pred, mode='xywht')
         bboxes = clip_boxes(bboxes, ims)
-        scores = torch.max(cls_score, dim=2, keepdim=True)[0]
+        scores = paddle.max(cls_score, axis=2, keepdim=True)[0]
         keep = (scores >= thresh)[0, :, 0]
         if keep.sum() == 0:
-            return [torch.zeros(1), torch.zeros(1), torch.zeros(1, 5)]
+            return [paddle.zeros((1,)), paddle.zeros((1,)), paddle.zeros((1, 5))]
         scores = scores[:, keep, :]
         anchors = anchors[:, keep, :]
         cls_score = cls_score[:, keep, :]
         bboxes = bboxes[:, keep, :]
         # NMS
-        anchors_nms_idx = nms(torch.cat([bboxes, scores], dim=2)[0, :, :], nms_thresh)
+        anchors_nms_idx = nms(paddle.concat([bboxes, scores], axis=2)[0, :, :], nms_thresh)
         nms_scores, nms_class = cls_score[0, anchors_nms_idx, :].max(dim=1)
-        output_boxes = torch.cat([
+        output_boxes = paddle.concat([
             bboxes[0, anchors_nms_idx, :],
             anchors[0, anchors_nms_idx, :]],
-            dim=1
+            axis=1
         )
         return [nms_scores, nms_class, output_boxes]
 

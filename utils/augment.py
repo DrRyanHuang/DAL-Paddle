@@ -6,7 +6,8 @@ import sys
 import os
 import math
 import imgaug.augmenters as iaa
-import torch
+# import torch
+import paddle
 from utils.bbox import quad_2_rbox, rbox_2_quad, mask_valid_boxes
 
 
@@ -468,11 +469,11 @@ def get_rotated_coors(box):
     x3 = t_x3*R[0,0] + t_y3*R[0,1] + R[0,2] 
     y3 = t_x3*R[1,0] + t_y3*R[1,1] + R[1,2] 
 
-    if isinstance(x0,torch.Tensor):
-        r_box=torch.cat([x0.unsqueeze(0),y0.unsqueeze(0),
-                         x1.unsqueeze(0),y1.unsqueeze(0),
-                         x2.unsqueeze(0),y2.unsqueeze(0),
-                         x3.unsqueeze(0),y3.unsqueeze(0)], 0)
+    if isinstance(x0, paddle.Tensor):
+        r_box = paddle.concat([x0.unsqueeze(0), y0.unsqueeze(0),
+                               x1.unsqueeze(0), y1.unsqueeze(0),
+                               x2.unsqueeze(0), y2.unsqueeze(0),
+                               x3.unsqueeze(0), y3.unsqueeze(0)], 0)
     else:
         r_box = np.array([x0,y0,x1,y1,x2,y2,x3,y3])
     return r_box
