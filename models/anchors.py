@@ -1,8 +1,11 @@
 from __future__ import print_function
 
 import numpy as np
-import torch
-import torch.nn as nn
+# import torch
+# import torch.nn as nn
+import paddle
+import paddle.nn as nn
+import paddle.nn.functional as F
 
 
 class Anchors(nn.Module):

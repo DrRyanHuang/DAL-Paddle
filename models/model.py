@@ -132,7 +132,7 @@ class RetinaNet(nn.Module):
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
 
-    def calc_mining_param(self, process,alpha):
+    def calc_mining_param(self, process, alpha):
         if process < 0.1:
             bf_weight = 1.0
         elif  process > 0.3:
