@@ -56,6 +56,7 @@ class FPN(nn.Layer):
         self.layer_blocks = []
         self.asff = use_asff
         for idx, in_channels in enumerate(in_channels_list, 1):
+            
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
 
@@ -67,6 +68,7 @@ class FPN(nn.Layer):
             self.add_module(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
+            
         self.top_blocks = top_blocks
 
     def forward(self, x):

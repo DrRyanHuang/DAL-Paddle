@@ -1,7 +1,10 @@
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+import paddle
+import paddle.nn as nn
+import paddle.nn.functional as F
 
 from utils.bbox import bbox_overlaps, min_area_square
 from utils.box_coder import BoxCoder
@@ -18,8 +21,8 @@ def xyxy2xywh_a(query_boxes):
     return out_boxes
 
 # cuda_overlaps
-class IntegratedLoss(nn.Module):
-    def __init__(self, alpha=0.25, gamma=2.0, func = 'smooth'):
+class IntegratedLoss(nn.Layer):
+    def __init__(self, alpha=0.25, gamma=2.0, func='smooth'):
         super(IntegratedLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
@@ -46,24 +49,26 @@ class IntegratedLoss(nn.Module):
             bbox_annotation = annotations[j, :, :]
             bbox_annotation = bbox_annotation[bbox_annotation[:, -1] != -1]
             if bbox_annotation.shape[0] == 0:
-                cls_losses.append(torch.tensor(0).float().cuda())
-                reg_losses.append(torch.tensor(0).float().cuda())
+                # cls_losses.append(torch.tensor(0).float().cuda())
+                # reg_losses.append(torch.tensor(0).float().cuda())
+                cls_losses.append(paddle.to_tensor(0.0))
+                reg_losses.append(paddle.to_tensor(0.0))
                 continue
-            classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
+            classification = paddle.clip(classification, 1e-4, 1.0 - 1e-4)
             sa = rbbx_overlaps(
                 xyxy2xywh_a(anchors[j, :, :].cpu().numpy()),
                 xyxy2xywh_a(bbox_annotation[:, :-1].cpu().numpy()),
             )
-            if not torch.is_tensor(sa):
+            if not paddle.is_tensor(sa):
                 # import ipdb;ipdb.set_trace()
-                sa = torch.from_numpy(sa).cuda()
+                sa = paddle.to_tensor(sa)
             if var != -1:
                 fa = rbbx_overlaps(
                     xyxy2xywh_a(refined_achors[j, :, :].cpu().numpy()),
                     xyxy2xywh_a(bbox_annotation[:, :-1].cpu().numpy()),
                 )
-                if not torch.is_tensor(fa):
-                    fa = torch.from_numpy(fa).cuda()
+                if not paddle.is_tensor(fa):
+                    fa = paddle.to_tensor(fa)
 
                 if var == 0:
                     md = abs((alpha * sa + beta * fa))
@@ -103,18 +108,18 @@ class IntegratedLoss(nn.Module):
             cls_targets[positive_indices, :] = 0
             cls_targets[positive_indices, assigned_annotations[positive_indices, -1].long()] = 1
             alpha_factor = torch.ones(cls_targets.shape).cuda() * self.alpha
-            alpha_factor = torch.where(torch.eq(cls_targets, 1.), alpha_factor, 1. - alpha_factor)
-            focal_weight = torch.where(torch.eq(cls_targets, 1.), 1. - classification, classification)
+            alpha_factor = paddle.where(torch.eq(cls_targets, 1.), alpha_factor, 1. - alpha_factor)
+            focal_weight = paddle.where(torch.eq(cls_targets, 1.), 1. - classification, classification)
             focal_weight = alpha_factor * torch.pow(focal_weight, self.gamma)
             bin_cross_entropy = -(cls_targets * torch.log(classification+1e-6) + (1.0 - cls_targets) * torch.log(1.0 - classification+1e-6))
             if das :
                 soft_weight = (torch.zeros(classification.shape)).cuda()
-                soft_weight = torch.where(torch.eq(cls_targets, 0.), torch.ones_like(cls_targets), soft_weight)
+                soft_weight = paddle.where(torch.eq(cls_targets, 0.), torch.ones_like(cls_targets), soft_weight)
                 soft_weight[positive_indices, assigned_annotations[positive_indices, -1].long()] = (matching_weight.max(1)[0] + 1)
                 cls_loss = focal_weight * bin_cross_entropy * soft_weight
             else:
                 cls_loss = focal_weight * bin_cross_entropy 
-            cls_loss = torch.where(torch.ne(cls_targets, -1.0), cls_loss, torch.zeros(cls_loss.shape).cuda())
+            cls_loss = paddle.where(torch.ne(cls_targets, -1.0), cls_loss, torch.zeros(cls_loss.shape).cuda())
             cls_losses.append(cls_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
             # reg loss
             if positive_indices.sum() > 0:
@@ -145,15 +150,15 @@ def smooth_l1_loss(inputs,
     """
     https://github.com/facebookresearch/maskrcnn-benchmark
     """
-    diff = torch.abs(inputs - targets)
+    diff = paddle.abs(inputs - targets)
     if  weight is  None:
-        loss = torch.where(
+        loss = paddle.where(
             diff < beta,
             0.5 * diff ** 2 / beta,
             diff - 0.5 * beta
         )
     else:
-        loss = torch.where(
+        loss = paddle.where(
             diff < beta,
             0.5 * diff ** 2 / beta,
             diff - 0.5 * beta
@@ -176,11 +181,11 @@ def balanced_l1_loss(inputs,
     assert beta > 0
     assert inputs.size() == targets.size() and targets.numel() > 0
 
-    diff = torch.abs(inputs - targets)
+    diff = paddle.abs(inputs - targets)
     b = np.e**(gamma / alpha) - 1
-    loss = torch.where(
-        diff < beta, alpha / b *
-        (b * diff + 1) * torch.log(b * diff / beta + 1) - alpha * diff,
+    loss = paddle.where(
+        diff < beta, 
+        alpha / b * (b * diff + 1) * paddle.log(b * diff / beta + 1) - alpha * diff,
         gamma * diff + gamma / b - alpha * beta)
 
     if size_average:

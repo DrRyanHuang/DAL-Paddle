@@ -8,7 +8,7 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 
-class Anchors(nn.Module):
+class Anchors(nn.Layer):
     def __init__(self,
                  pyramid_levels=None,
                  strides=None,
@@ -53,9 +53,12 @@ class Anchors(nn.Module):
             all_anchors = np.append(all_anchors, shifted_anchors, axis=0)
         all_anchors = np.expand_dims(all_anchors, axis=0)
         all_anchors = np.tile(all_anchors, (ims.size(0), 1, 1))
-        all_anchors = torch.from_numpy(all_anchors.astype(np.float32))
-        if torch.is_tensor(ims) and ims.is_cuda:
-            all_anchors = all_anchors.cuda()
+        all_anchors = paddle.to_tensor(all_anchors.astype(np.float32))
+        
+        # Paddle 默认在 GPU 上
+        # if paddle.is_tensor(ims) and ims.is_cuda:
+        #     all_anchors = all_anchors.cuda()
+            
         return all_anchors
 
 
