@@ -35,11 +35,11 @@ class Collater(object):
             max_width = width if width > max_width else max_width
             max_height = height if height > max_height else max_height
 
-        padded_ims = torch.zeros(batch_size, 3, max_height, max_width)
+        padded_ims = paddle.zeros((batch_size, 3, max_height, max_width))
 
         num_params = bboxes[0].shape[-1]   
         max_num_boxes = max(bbox.shape[0] for bbox in bboxes)
-        padded_boxes = torch.ones(batch_size, max_num_boxes, num_params) * -1
+        padded_boxes = paddle.ones((batch_size, max_num_boxes, num_params)) * -1
         for i in range(batch_size):
             im, bbox = images[i], bboxes[i]
             im, im_scale = rescale(im)
@@ -49,5 +49,5 @@ class Collater(object):
                 bbox[:, :4] = bbox[:, :4] * im_scale
             else:   
                 bbox[:, :8] = bbox[:, :8] * np.hstack((im_scale, im_scale))
-            padded_boxes[i, :bbox.shape[0], :] = torch.from_numpy(bbox)
+            padded_boxes[i, :bbox.shape[0], :] = paddle.to_tensor(bbox)
         return {'image': padded_ims, 'boxes': padded_boxes}

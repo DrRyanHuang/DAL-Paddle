@@ -26,7 +26,7 @@ def xy2wh(boxes):
     :param boxes: (xmin, ymin, xmax, ymax) (n, 4)
     :return: out_boxes: (x_ctr, y_ctr, w, h) (n, 4)
     """
-    if torch.is_tensor(boxes):
+    if paddle.is_tensor(boxes):
         out_boxes = boxes.clone()
     else:
         out_boxes = boxes.copy()
@@ -37,16 +37,16 @@ def xy2wh(boxes):
 
     return out_boxes
 
-def constraint_theta(bboxes, mode = 'xywha'):
+def constraint_theta(bboxes, mode='xywha'):
     keep_dim = False
     if len(bboxes.shape) == 1:
         keep_dim = True
-        if isinstance(bboxes, torch.Tensor):
+        if isinstance(bboxes, paddle.Tensor):
             bboxes = bboxes.unsqueeze(0) 
-        if isinstance(bboxes,np.ndarray):
+        if isinstance(bboxes, np.ndarray):
             bboxes = np.expand_dims(bboxes, 0) 
         else: bboxes = [bboxes]
-    if isinstance(bboxes,torch.Tensor):
+    if isinstance(bboxes, paddle.Tensor):
         assert bboxes.grad_fn is False, 'Modifying variables to be calc. grad. is not allowed!!'
     assert (bboxes[:, 4] >= -90).all() and (bboxes[:, 4] <= 90).all(), 'pleast restrict theta to (-90,90)'       
     for box in bboxes:
@@ -70,18 +70,18 @@ def constraint_theta(bboxes, mode = 'xywha'):
 
 
 def bbox_overlaps(boxes, query_boxes):
-    if not isinstance(boxes,float):   # apex
+    if not isinstance(boxes, float):   # apex
         boxes = boxes.float()
     area = (query_boxes[:, 2] - query_boxes[:, 0]) * \
            (query_boxes[:, 3] - query_boxes[:, 1])
-    iw = torch.min(torch.unsqueeze(boxes[:, 2], dim=1), query_boxes[:, 2]) - \
-         torch.max(torch.unsqueeze(boxes[:, 0], 1), query_boxes[:, 0])
-    ih = torch.min(torch.unsqueeze(boxes[:, 3], dim=1), query_boxes[:, 3]) - \
-         torch.max(torch.unsqueeze(boxes[:, 1], 1), query_boxes[:, 1])
-    iw = torch.clamp(iw, min=0)
-    ih = torch.clamp(ih, min=0)
-    ua = torch.unsqueeze((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]), dim=1) + area - iw * ih
-    ua = torch.clamp(ua, min=1e-8)
+    iw = paddle.min(paddle.unsqueeze(boxes[:, 2], axis=1), query_boxes[:, 2]) - \
+         paddle.max(paddle.unsqueeze(boxes[:, 0], axis=1), query_boxes[:, 0])
+    ih = paddle.min(paddle.unsqueeze(boxes[:, 3], axis=1), query_boxes[:, 3]) - \
+         paddle.max(paddle.unsqueeze(boxes[:, 1], axis=1), query_boxes[:, 1])
+    iw = paddle.clip(iw, min=0)
+    ih = paddle.clip(ih, min=0)
+    ua = paddle.unsqueeze((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]), axis=1) + area - iw * ih
+    ua = paddle.clip(ua, min=1e-8)
     intersection = iw * ih
     return intersection / ua
 
@@ -195,20 +195,20 @@ def min_area_square(rboxes):
     h = rboxes[:, 3] - rboxes[:, 1]
     ctr_x = rboxes[:, 0] + w * 0.5
     ctr_y = rboxes[:, 1] + h * 0.5
-    s = torch.max(w, h)
-    return torch.stack((
+    s = paddle.max(w, h)
+    return paddle.stack((
         ctr_x - s * 0.5, ctr_y - s * 0.5,
         ctr_x + s * 0.5, ctr_y + s * 0.5),
-        dim=1
+        axis=1
     )
 
 
 def clip_boxes(boxes, ims):
     _, _, h, w = ims.shape
-    boxes[:, :, 0] = torch.clamp(boxes[:, :, 0], min=0)
-    boxes[:, :, 1] = torch.clamp(boxes[:, :, 1], min=0)
-    boxes[:, :, 2] = torch.clamp(boxes[:, :, 2], max=w)
-    boxes[:, :, 3] = torch.clamp(boxes[:, :, 3], max=h)
+    boxes[:, :, 0] = paddle.clip(boxes[:, :, 0], min=0)
+    boxes[:, :, 1] = paddle.clip(boxes[:, :, 1], min=0)
+    boxes[:, :, 2] = paddle.clip(boxes[:, :, 2], max=w)
+    boxes[:, :, 3] = paddle.clip(boxes[:, :, 3], max=h)
     return boxes
 
 
