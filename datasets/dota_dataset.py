@@ -59,7 +59,7 @@ class DOTADataset(Dataset):
         for i, bbox in enumerate(bboxes):
             gt_boxes[i, :5] = quad_2_rbox(np.array(bbox), mode = 'xyxya')   
             gt_boxes[i, 5] = classes[i]
-
+            
         ## test augmentation
         # plot_gt(im, gt_boxes[:,:-1], im_path, mode = 'xyxya')
         return {'image': im, 'boxes': gt_boxes, 'path': im_path}
@@ -97,6 +97,11 @@ class DOTADataset(Dataset):
                     label = self.class_to_ind[class_name] 
                     boxes.append(box)
                     gt_classes.append(label)
+            
+        if len(boxes) == 0:
+            return {'boxes': np.zeros(((0, 8)), dtype=np.int32), 
+                    'gt_classes': np.array((0,), dtype=np.int32)}
+                    
         return {'boxes': np.array(boxes, dtype=np.int32), 'gt_classes': np.array(gt_classes)}
 
 
