@@ -94,13 +94,6 @@ class IntegratedLoss(nn.Layer):
                 return idx
             
             
-            mask = bbox_annotation[:, -1] != -1
-            bbox_annotation = fuck_paddle_idx(bbox_annotation, mask)
-            # m, n = bbox_annotation.shape
-            # idx = paddle.masked_select(paddle.arange(m, dtype="int32"), 
-            #                             mask)
-            # idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
-            
             if bbox_annotation.shape[0] == 0:
             # if idx.shape[0] == 0:
                 
@@ -111,7 +104,16 @@ class IntegratedLoss(nn.Layer):
                 reg_losses.append(paddle.to_tensor(0.0))
                 continue
             
+            mask = bbox_annotation[:, -1] != -1
+            bbox_annotation = fuck_paddle_idx(bbox_annotation, mask)
+            # m, n = bbox_annotation.shape
+            # idx = paddle.masked_select(paddle.arange(m, dtype="int32"), 
+            #                             mask)
+            # idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+            
             # bbox_annotation = paddle.index_select(bbox_annotation, idx, axis=0)
+            
+            
             
             classification = paddle.clip(classification, 1e-4, 1.0 - 1e-4)
             sa = rbbx_overlaps(
