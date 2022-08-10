@@ -85,6 +85,13 @@ class IntegratedLoss(nn.Layer):
                         return paddle.to_tensor(np.zeros(shape=(0,)))
                     
                     return paddle.index_select(inp, idx, axis=0)
+                
+                
+            def boolidx2tensor(mask):
+                assert len(mask.shape)==1
+                m = len(mask)
+                idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+                return idx
             
             
             mask = bbox_annotation[:, -1] != -1
@@ -192,8 +199,10 @@ class IntegratedLoss(nn.Layer):
                                            soft_weight)
                 
                 # right = assigned_annotations[positive_indices, -1].long()
-                right = fuck_paddle_idx(assigned_annotations[:, -1], positive_indices)
-                soft_weight[positive_indices, right] = (matching_weight.max(1)[0] + 1)
+                right = fuck_paddle_idx(assigned_annotations[:, -1], positive_indices).cast("int")
+                # soft_weight[positive_indices, right] = (matching_weight.max(1) + 1)
+                soft_weight[boolidx2tensor(positive_indices), right] = (matching_weight.max(1) + 1)
+                
                 cls_loss = focal_weight * bin_cross_entropy * soft_weight
             else:
                 cls_loss = focal_weight * bin_cross_entropy 

@@ -12,7 +12,6 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 import subprocess
 import numpy as np
-import platform
 
 
 def find_in_path(name, path):
@@ -41,31 +40,18 @@ def locate_cuda():
         home = os.environ['CUDAHOME']
         nvcc = pjoin(home, 'bin', 'nvcc')
     else:
-        
-        if platform.system() == "Linux":
-            # otherwise, search the PATH for NVCC
-            default_path = pjoin(os.sep, 'usr', 'local', 'cuda', 'bin')
-            nvcc = find_in_path('nvcc', os.environ['PATH'] + os.pathsep + default_path)
-            if nvcc is None:
-                raise EnvironmentError('The nvcc binary could not be '
-                    'located in your $PATH. Either add it to your path, or set $CUDAHOME')
-            home = os.path.dirname(os.path.dirname(nvcc))
-            
-        elif platform.system() == "Windows":
-            nvcc = os.popen("where nvcc").read().strip()
-            if not nvcc.endswith("nvcc.exe"):
-                raise EnvironmentError('需要下载 CUDA，并且将其添加到' \
-                    ' %PATH% 环境变量中')
-            home = os.path.dirname(os.path.dirname(nvcc))
+        # otherwise, search the PATH for NVCC
+        default_path = pjoin(os.sep, 'usr', 'local', 'cuda', 'bin')
+        nvcc = find_in_path('nvcc', os.environ['PATH'] + os.pathsep + default_path)
+        if nvcc is None:
+            raise EnvironmentError('The nvcc binary could not be '
+                'located in your $PATH. Either add it to your path, or set $CUDAHOME')
+        home = os.path.dirname(os.path.dirname(nvcc))
 
     cudaconfig = {'home':home, 'nvcc':nvcc,
                   'include': pjoin(home, 'include'),
                   'lib64': pjoin(home, 'lib64')}
     for k, v in cudaconfig.items():
-        if v.endswith("lib64"):
-            if not os.path.exists(v): # 如果不存在则修改
-                cudaconfig[k] = v.replace("lib64", "lib")
-                v = cudaconfig[k]
         if not os.path.exists(v):
             raise EnvironmentError('The CUDA %s path could not be located in %s' % (k, v))
 
@@ -94,11 +80,7 @@ def customize_compiler_for_nvcc(self):
     self.src_extensions.append('.cu')
 
     # save references to the default compiler_so and _comple methods
-    # default_compiler_so = self.compiler_so
-    # 参考自：
-    # https://www.jianshu.com/p/0c9542cef58a
-    default_compiler_so = ""
-
+    default_compiler_so = self.compiler_so
     super = self._compile
 
     # now redefine the _compile method. This gets executed for each
