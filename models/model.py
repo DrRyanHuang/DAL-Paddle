@@ -76,14 +76,19 @@ class RetinaNet(nn.Layer):
 
     def ims_2_features(self, ims):
         c1 = self.backbone.relu(self.backbone.bn1(self.backbone.conv1(ims)))
+        # print(c1.shape)
         c2 = self.backbone.layer1(self.backbone.maxpool(c1))
+        # print(c2.shape)
         c3 = self.backbone.layer2(c2)
+        # print(c3.shape)
         c4 = self.backbone.layer3(c3)
+        # print(c4.shape)
         c5 = self.backbone.layer4(c4)
+        # print(c5.shape)
         #c_i shape: bs,C,H,W
         return [c3, c4, c5]
 
-    def forward(self, ims, gt_boxes=None, test_conf=None,process=None):
+    def forward(self, ims, gt_boxes=None, test_conf=None, process=None):
         anchors_list, offsets_list, cls_list, var_list = [], [], [], []
         original_anchors = self.anchor_generator(ims)   # (bs, num_all_achors, 5)
         anchors_list.append(original_anchors)
@@ -110,7 +115,7 @@ class RetinaNet(nn.Layer):
             thresh = test_conf
         bboxes = self.box_coder.decode(anchors, bbox_pred, mode='xywht')
         bboxes = clip_boxes(bboxes, ims)
-        scores = paddle.max(cls_score, axis=2, keepdim=True)[0]
+        scores = paddle.max(cls_score, axis=2, keepdim=True)
         keep = (scores >= thresh)[0, :, 0]
         if keep.sum() == 0:
             return [paddle.zeros((1,)), paddle.zeros((1,)), paddle.zeros((1, 5))]

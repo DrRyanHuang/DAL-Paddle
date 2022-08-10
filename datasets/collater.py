@@ -27,6 +27,8 @@ class Collater(object):
 
         images = [sample['image'] for sample in batch]
         bboxes = [sample['boxes'] for sample in batch]
+        path   = [sample['path']  for sample in batch]
+        
         batch_size = len(images)
         max_width, max_height = -1, -1
         for i in range(batch_size):
@@ -50,4 +52,4 @@ class Collater(object):
             else:   
                 bbox[:, :8] = bbox[:, :8] * np.hstack((im_scale, im_scale))
             padded_boxes[i, :bbox.shape[0], :] = paddle.to_tensor(bbox)
-        return {'image': padded_ims, 'boxes': padded_boxes}
+        return {'image': padded_ims, 'boxes': padded_boxes, "path":path}

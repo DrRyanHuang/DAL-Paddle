@@ -45,6 +45,19 @@ python setup.py build_ext --inplace
 - swig 工具，linux环境不必多说，windows需要上官网下载一下`swig.exe`
 
 
+### 支持的数据集
+
+目前只支持DOTAv1数据集，需要自己写一个`train.txt`, 里面有所有的照片的**绝对**路径，不需要其标注的路径
+
+关于具体内容，请查看`DAL/datasets/dota_dataset.py`
+
+下载地址在这里：[https://captain-whu.github.io/DOTA/dataset.html](https://captain-whu.github.io/DOTA/dataset.html)
+
+温馨提示：
+
+`labelTxt-v1.0`文件夹中存放的是DOTA v1.0版本的标签信息，有`labelTxt`、`trainset_reclabelTxt`两个文件夹。`labelTxt`文件夹中存放的是obb（定向边界框）标签信息，`trainset_reclabelTxt`文件夹中存放的是hbb（水平边界框）标签信息。
+
+
 
 ### Inference
 You can use the following command to test a dataset. Note that `weight`, `img_dir`, `dataset`,`hyp` should be modified as appropriate.

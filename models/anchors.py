@@ -52,7 +52,7 @@ class Anchors(nn.Layer):
             shifted_anchors = shift(image_shapes[idx], self.strides[idx], anchors)
             all_anchors = np.append(all_anchors, shifted_anchors, axis=0)
         all_anchors = np.expand_dims(all_anchors, axis=0)
-        all_anchors = np.tile(all_anchors, (ims.size(0), 1, 1))
+        all_anchors = np.tile(all_anchors, (ims.shape[0], 1, 1))
         all_anchors = paddle.to_tensor(all_anchors.astype(np.float32))
         
         # Paddle 默认在 GPU 上

@@ -1,3 +1,14 @@
 utils/__pycache__/*
 datasets/__pycache__/*
 models/__pycache__/*
+__pycache__/*
+*.txt
+*.so
+*.pyd
+*.png
+*.pyc
+outputs/*
+utils/nms/build/*
+utils/overlaps/build/*
+utils/overlaps_cuda/build/*
+weights/*

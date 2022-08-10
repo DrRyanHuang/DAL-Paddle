@@ -1,15 +1,12 @@
 import numpy as np
-# import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
 from utils.bbox import bbox_overlaps, min_area_square
 from utils.box_coder import BoxCoder
-from utils.overlaps.rbox_overlaps import rbox_overlaps
-from utils.overlaps_cuda.rbbox_overlaps  import rbbx_overlaps
+from utils.overlaps.rbox_overlaps import rbox_overlaps as rbbx_overlaps
+# from utils.overlaps_cuda.rbbox_overlaps import rbbx_overlaps
 
 
 def xyxy2xywh_a(query_boxes):
@@ -48,13 +45,67 @@ class IntegratedLoss(nn.Layer):
             classification = classifications[j, :, :]
             regression = regressions[j, :, :]
             bbox_annotation = annotations[j, :, :]
-            bbox_annotation = bbox_annotation[bbox_annotation[:, -1] != -1]
+            # Paddle 不支持直接这样索引
+            # bbox_annotation = bbox_annotation[bbox_annotation[:, -1] != -1]
+            
+            # Paddle2.3 依旧不支持, 焯
+            # bbox_annotation = paddle.masked_select(bbox_annotation, 
+            #                                        bbox_annotation[:, -1] != -1)
+            
+            # # Paddle2.3 mask 堆叠2次不支持 data_type[bool] ......
+            # # 我只能用这种比较蠢的方式....
+            # mask = bbox_annotation[:, -1] != -1
+            # _, n = bbox_annotation.shape
+            # mask_int = paddle.stack([mask.cast("int")]*n, 
+            #                         axis=1)
+            # mask = mask_int.cast("bool")
+            # bbox_annotation = paddle.masked_select(bbox_annotation, 
+            #                                        mask)
+            # bbox_annotation = bbox_annotation.reshape((-1, n))
+            # # 这样做完 bbox_annotation 错误
+            # # https://github.com/PaddlePaddle/Paddle/issues/45007
+            
+            
+            def fuck_paddle_idx(inp, mask):
+                
+                if len(inp.shape)==2:
+                    m, n = inp.shape
+                    idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+                    
+                    if idx.shape[0] == 0:
+                        return paddle.to_tensor(np.zeros(shape=(0, n)))
+                    
+                    return paddle.index_select(inp, idx, axis=0)
+                
+                elif len(inp.shape)==1:
+                    m = len(inp)
+                    idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+                    
+                    if idx.shape[0] == 0:
+                        return paddle.to_tensor(np.zeros(shape=(0,)))
+                    
+                    return paddle.index_select(inp, idx, axis=0)
+            
+            
+            mask = bbox_annotation[:, -1] != -1
+            bbox_annotation = fuck_paddle_idx(bbox_annotation, mask)
+            # m, n = bbox_annotation.shape
+            # idx = paddle.masked_select(paddle.arange(m, dtype="int32"), 
+            #                             mask)
+            # idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+            
             if bbox_annotation.shape[0] == 0:
+            # if idx.shape[0] == 0:
+                
                 # cls_losses.append(torch.tensor(0).float().cuda())
                 # reg_losses.append(torch.tensor(0).float().cuda())
+                
                 cls_losses.append(paddle.to_tensor(0.0))
                 reg_losses.append(paddle.to_tensor(0.0))
                 continue
+            
+            # bbox_annotation = paddle.index_select(bbox_annotation, idx, axis=0)
+            
             classification = paddle.clip(classification, 1e-4, 1.0 - 1e-4)
             sa = rbbx_overlaps(
                 xyxy2xywh_a(anchors[j, :, :].cpu().numpy()),
@@ -72,42 +123,61 @@ class IntegratedLoss(nn.Layer):
                     fa = paddle.to_tensor(fa)
 
                 if var == 0:
-                    md = abs((alpha * sa + beta * fa))
+                    md = paddle.abs((alpha * sa + beta * fa))
                 else:
-                    md = abs((alpha * sa + beta * fa) - abs(fa - sa)**var)
+                    md = paddle.abs((alpha * sa + beta * fa) - paddle.abs(fa - sa)**var)
             else:
                 das = False
                 md = sa
             
-            iou_max, iou_argmax = paddle.max(md, axis=1)
+            iou_max, iou_argmax = paddle.max(md, axis=1), paddle.argmax(md, axis=1)
            
-            positive_indices = paddle.greater_equal(iou_max, md_thres)
+            # positive_indices = paddle.greater_equal(iou_max, md_thres)
+            positive_indices = iou_max >= md_thres
 
              
-            max_gt, argmax_gt = md.max(0) 
+            max_gt, argmax_gt = md.max(0), md.argmax(0)
             # import ipdb;ipdb.set_trace(context = 15)
             if (max_gt < md_thres).any():
-                positive_indices[argmax_gt[max_gt < md_thres]]=1
+                
+                # Paddle无法直接索引，这个操作好窒息
+                # positive_indices[argmax_gt[max_gt < md_thres]]=1
+                
+                argmax_gt_mask = max_gt < md_thres
+                positive_indices_idx = fuck_paddle_idx(argmax_gt, argmax_gt_mask)
+                positive_indices[ positive_indices_idx.numpy().tolist() ] = 1
+                
               
             # matching-weight
             if das:
-                pos = md[positive_indices]
-                pos_mask = paddle.greater_equal(pos, md_thres)
-                max_pos, armmax_pos = pos.max(0)
+                # pos = md[positive_indices]
+                pos = fuck_paddle_idx(md, positive_indices)
+                # pos_mask = paddle.greater_equal(pos, md_thres)
+                pos_mask = pos >= md_thres
+                max_pos, armmax_pos = pos.max(0), pos.argmax(0)
                 nt = md.shape[1]
                 for gt_idx in range(nt):
                     pos_mask[armmax_pos[gt_idx], gt_idx] = 1
-                comp = paddle.where(pos_mask, (1 - max_pos).repeat(len(pos),1), pos)
+                    
+                left = (1 - max_pos).tile((len(pos),1))
+                comp = paddle.where(pos_mask, left, pos)
                 matching_weight = comp + pos
             # import ipdb; ipdb.set_trace(context = 15)
 
             # cls loss
             cls_targets = paddle.ones(classification.shape) * -1
-            cls_targets[paddle.less_than(iou_max, md_thres - 0.1), :] = 0
+            # left_idx = paddle.less_than(iou_max, md_thres - 0.1)
+            left_idx = iou_max < md_thres - 0.1
+            cls_targets[left_idx, :] = 0
             num_positive_anchors = positive_indices.sum()
-            assigned_annotations = bbox_annotation[iou_argmax, :]
+            # assigned_annotations = bbox_annotation[iou_argmax, :]
+            assigned_annotations = bbox_annotation[iou_argmax]
+            
             cls_targets[positive_indices, :] = 0
-            cls_targets[positive_indices, assigned_annotations[positive_indices, -1].long()] = 1
+            # right = assigned_annotations[positive_indices, -1].long()
+            right = assigned_annotations[:, -1][positive_indices].cast("int")
+            
+            cls_targets[positive_indices, right] = 1
             alpha_factor = paddle.ones(cls_targets.shape) * self.alpha
             alpha_factor = paddle.where(paddle.equal(cls_targets, 1.), alpha_factor, 1. - alpha_factor)
             focal_weight = paddle.where(paddle.equal(cls_targets, 1.), 1. - classification, classification)
@@ -120,23 +190,37 @@ class IntegratedLoss(nn.Layer):
                 soft_weight = paddle.where(paddle.equal(cls_targets, 0.), 
                                            paddle.ones_like(cls_targets), 
                                            soft_weight)
-                soft_weight[positive_indices, assigned_annotations[positive_indices, -1].long()] = (matching_weight.max(1)[0] + 1)
+                
+                # right = assigned_annotations[positive_indices, -1].long()
+                right = fuck_paddle_idx(assigned_annotations[:, -1], positive_indices)
+                soft_weight[positive_indices, right] = (matching_weight.max(1)[0] + 1)
                 cls_loss = focal_weight * bin_cross_entropy * soft_weight
             else:
                 cls_loss = focal_weight * bin_cross_entropy 
-            cls_loss = paddle.where(paddle.not_equal(cls_targets, -1.0), 
-                                    cls_loss, 
-                                    paddle.zeros(cls_loss.shape))
-            cls_losses.append(cls_loss.sum() / paddle.clip(num_positive_anchors.float(), min=1.0))
+            cls_loss = paddle.where(
+                cls_targets != -1.0,
+                # paddle.not_equal(cls_targets, -1.0), 
+                cls_loss, 
+                paddle.zeros(cls_loss.shape))
+            cls_losses.append(cls_loss.sum() / paddle.clip(num_positive_anchors.cast("float32"), min=1.0))
             # reg loss
             if positive_indices.sum() > 0:
-                all_rois = anchors[j, positive_indices, :]
-                gt_boxes = assigned_annotations[positive_indices, :]
+                # all_rois = anchors[j, positive_indices, :]
+                # 其实就是：all_rois = anchors[j][positive_indices]
+                all_rois = fuck_paddle_idx(anchors[j], positive_indices)
+                # gt_boxes = assigned_annotations[positive_indices, :]
+                # 其实就是：gt_boxes = assigned_annotations[positive_indices]
+                gt_boxes = fuck_paddle_idx(assigned_annotations, positive_indices)
                 reg_targets = self.box_coder.encode(all_rois, gt_boxes)
+                
+                # first_param = regression[positive_indices, :]
+                first_param = fuck_paddle_idx(regression, positive_indices)
                 if das:
-                    reg_loss = self.criteron(regression[positive_indices, :], reg_targets, weight = matching_weight)
+                    reg_loss = self.criteron(first_param, 
+                                             reg_targets, 
+                                             weight = matching_weight)
                 else:
-                    reg_loss = self.criteron(regression[positive_indices, :], reg_targets)
+                    reg_loss = self.criteron(first_param, reg_targets)
                 reg_losses.append(reg_loss)
 
                 if not paddle.isfinite(reg_loss) :
@@ -169,7 +253,7 @@ def smooth_l1_loss(inputs,
             diff < beta,
             0.5 * diff ** 2 / beta,
             diff - 0.5 * beta
-        ) * weight.max(1)[0].unsqueeze(1).repeat(1,5)
+        ) * weight.max(1).unsqueeze(1).tile((1,5))
     if size_average:
         return loss.mean()
     return loss.sum()

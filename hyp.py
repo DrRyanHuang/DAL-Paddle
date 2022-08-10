@@ -9,6 +9,6 @@ num_classes: 10
 
 # training
 epochs: 100
-batch_size: 2
+batch_size: 1
 save_interval: 5
 test_interval: 5

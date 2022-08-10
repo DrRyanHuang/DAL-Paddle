@@ -8,12 +8,20 @@ import glob
 import paddle
 import paddle.nn as nn
 import paddle.optimizer as optim
-
+import paddle.optimizer.lr as lr
 
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from utils.utils import hyp_parse, init_seeds
-from datasets import DOTADataset
+from utils.utils import hyp_parse, init_seeds, model_info
+from datasets import DOTADataset, Collater
+from models.model import RetinaNet
+
+from paddle_warmup_lr import WarmupLR
+
+# 第1处改动，导入分布式训练所需要的包
+import paddle.distributed as dist
+from eval import evaluate
+
 
 mixed_precision = True
 try:  
@@ -42,9 +50,9 @@ def train_model(args, hyps):
     epochs = int(hyps['epochs'])
     batch_size = int(hyps['batch_size'])
     results_file = 'result.txt'
-    weight =  'weights' + os.sep + 'last.pth' if args.resume or args.load else args.weight
-    last = 'weights' + os.sep + 'last.pth'
-    best = 'weights' + os.sep + 'best.pth'
+    weight =  'weights' + os.sep + 'last.pdparams' if args.resume or args.load else args.weight
+    last = 'weights' + os.sep + 'last.pdparams'
+    best = 'weights' + os.sep + 'best.pdparams'
     start_epoch = 0
     best_fitness = 0 #   max f1
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -69,43 +77,49 @@ def train_model(args, hyps):
     assert args.dataset in DATASETS.keys(), 'Not supported dataset!'
     ds = DATASETS[args.dataset](dataset=args.train_path, augment=args.augment)
     collater = Collater(scales=scales, keep_ratio=True, multiple=32)
-    loader = data.DataLoader(
+    loader = paddle.io.DataLoader(
         dataset=ds,
         batch_size=batch_size,
-        num_workers=8,
+        num_workers=0,
         collate_fn=collater,
-        shuffle=True,
-        pin_memory=True,
+        shuffle=False, # 这里先定死
+        use_shared_memory =True,
         drop_last=True
     )
     
     # Initialize model
     init_seeds()
     model = RetinaNet(backbone=args.backbone, hyps=hyps)
-
-    # Optimizer
-    optimizer = optim.Adam(model.parameters(), lr=hyps['lr0'])
+    
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=0.1)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[round(epochs * x) for x in [0.7, 0.9]], gamma=0.1)
+    scheduler = lr.MultiStepDecay(hyps['lr0'], milestones=[round(epochs * x) for x in [0.7, 0.9]], gamma=0.1)
     scheduler = WarmupLR(scheduler, init_lr=hyps['warmup_lr'], num_warmup=hyps['warm_epoch'], warmup_strategy='cos')
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=1, eta_min = 1e-5)
     scheduler.last_epoch = start_epoch - 1
+    
+    clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=1.0)
+    # Optimizer
+    optimizer = optim.Adam(learning_rate=scheduler,
+                           parameters=model.parameters(), 
+                           grad_clip=clip)
+    
     ######## Plot lr schedule #####
-#     y = []
-#     for _ in range(epochs):
-#         scheduler.step()
-#         y.append(optimizer.param_groups[0]['lr'])
-#     plt.plot(y, label='LR')
-#     plt.xlabel('epoch')
-#     plt.ylabel('LR')
-#     plt.tight_layout()
-#     plt.savefig('LR.png', dpi=300)    
-#     import ipdb; ipdb.set_trace()
+    # y = []
+    # for _ in range(epochs):
+    #     scheduler.step()
+    #     # y.append(optimizer.param_groups[0]['lr'])
+    #     y.append(optimizer.get_lr())
+    # plt.plot(y, label='LR')
+    # plt.xlabel('epoch')
+    # plt.ylabel('LR')
+    # plt.tight_layout()
+    # plt.savefig('LR.png', dpi=300)    
+    # import ipdb; ipdb.set_trace()
     ###########################################
 
     # load chkpt
-    if weight.endswith('.pth'):
-        chkpt = torch.load(weight)
+    if weight.endswith('.pdparams'):
+        chkpt = paddle.load(weight)
         # load model
         if 'model' in chkpt.keys() :
             model.load_state_dict(chkpt['model'])
@@ -117,7 +131,7 @@ def train_model(args, hyps):
             best_fitness = chkpt['best_fitness']
             for state in optimizer.state.values():
                 for k, v in state.items():
-                    if isinstance(v, torch.Tensor):
+                    if isinstance(v, paddle.Tensor):
                         state[k] = v.cuda()
         # load results
         if 'training_results' in chkpt.keys() and  chkpt.get('training_results') is not None and args.resume:
@@ -128,10 +142,14 @@ def train_model(args, hyps):
 
         del chkpt
  
-    if torch.cuda.is_available():
-        model.cuda()
-    if torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model).cuda()
+    # if torch.cuda.is_available():
+    #     model.cuda()
+    
+    if paddle.device.cuda.device_count() > 1:
+        # model = torch.nn.DataParallel(model).cuda()
+        # 第2处改动，初始化并行环境
+        dist.init_parallel_env()
+        model = paddle.DataParallel(model)
    
 
     if mixed_precision:
@@ -144,25 +162,28 @@ def train_model(args, hyps):
     for epoch in range(start_epoch,epochs):
         print(('\n' + '%10s' * 7) % ('Epoch', 'gpu_mem',  'cls', 'reg', 'total', 'targets', 'img_size'))
         pbar = tqdm(enumerate(loader), total=len(loader))  # progress bar
-        mloss = torch.zeros(2).cuda()
+        mloss = paddle.zeros((2, 1))
         for i, (ni, batch) in enumerate(pbar):
             
             model.train()
 
             if args.freeze_bn:
-                if torch.cuda.device_count() > 1:
+                if paddle.device.cuda.device_count() > 1:
                     model.module.freeze_bn()
                 else:
                     model.freeze_bn()
 
-            optimizer.zero_grad()
+            optimizer.clear_gradients()
             ims, gt_boxes = batch['image'], batch['boxes']
-            if torch.cuda.is_available():
-                ims, gt_boxes = ims.cuda(), gt_boxes.cuda()
-            losses = model(ims, gt_boxes,process =epoch/epochs )
+            
+            # 默认GPU
+            # if torch.cuda.is_available():
+            #     ims, gt_boxes = ims.cuda(), gt_boxes.cuda()
+                
+            losses = model(ims, gt_boxes, process=epoch/epochs )
             loss_cls, loss_reg = losses['loss_cls'].mean(), losses['loss_reg'].mean()
             loss = loss_cls + loss_reg
-            if not torch.isfinite(loss):
+            if not paddle.isfinite(loss):
                 import ipdb; ipdb.set_trace()
                 print('WARNING: non-finite loss, ending training ')
                 break
@@ -176,16 +197,21 @@ def train_model(args, hyps):
             else:
                 loss.backward()
 
-            nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+            # nn.utils.clip_grad_norm_(model.parameters(), 0.1)
             optimizer.step()
 
             # Print batch results
-            loss_items = torch.stack([loss_cls, loss_reg], 0).detach()
+            loss_items = paddle.stack([loss_cls, loss_reg], 0).detach()
             mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
-            mem = torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0  # (GB)
+            # mem = torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0  # (GB)
+            mem = paddle.device.cuda.memory_reserved() / 1E9
+            
             s = ('%10s' * 2 + '%10.3g' * 5) % (
                   '%g/%g' % (epoch, epochs - 1), '%.3gG' % mem, *mloss, mloss.sum(), gt_boxes.shape[1], min(ims.shape[2:]))
             pbar.set_description(s)
+            
+            # if i>=1:
+            #     break
 
         # Update scheduler
         scheduler.step()
@@ -193,7 +219,7 @@ def train_model(args, hyps):
         
         # eval
         if hyps['test_interval']!= -1 and epoch % hyps['test_interval'] == 0 and epoch > 30 :
-            if torch.cuda.device_count() > 1:
+            if paddle.device.cuda.device_count() > 1:
                 results = evaluate(target_size=args.target_size,
                                    test_path=args.test_path,
                                    dataset=args.dataset,
@@ -226,26 +252,26 @@ def train_model(args, hyps):
             chkpt = {'epoch': epoch,
                      'best_fitness': best_fitness,
                      'training_results': f.read(),
-                     'model': model.module.state_dict() if type(
-                        model) is nn.parallel.DistributedDataParallel else model.state_dict(),
+                     'model': model.module.state_dict() if type( # TODO
+                        model) is paddle.DataParallel else model.state_dict(),
                      'optimizer': None if final_epoch else optimizer.state_dict()}
         
 
         # Save last checkpoint
-        torch.save(chkpt, last)
+        paddle.save(chkpt, last)
         # Save best checkpoint
         if best_fitness == fitness:
-            torch.save(chkpt, best) 
+            paddle.save(chkpt, best) 
 
         if (epoch % hyps['save_interval'] == 0  and epoch > 100) or final_epoch:
-            if torch.cuda.device_count() > 1:
-                torch.save(chkpt, './weights/deploy%g.pth'% epoch)
+            if paddle.device.cuda.device_count() > 1:
+                paddle.save(chkpt, './weights/deploy%g.pdparams'% epoch)
             else:
-                torch.save(chkpt, './weights/deploy%g.pth'% epoch)
+                paddle.save(chkpt, './weights/deploy%g.pdparams'% epoch)
 
     # end training
-    dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
-    torch.cuda.empty_cache()
+    dist.destroy_process_group() if paddle.device.cuda.device_count() > 1 else None
+    paddle.device.cuda.empty_cache()
 
 if __name__ == '__main__':
     
@@ -260,12 +286,12 @@ if __name__ == '__main__':
 
     # NWPU-VHR10
     parser.add_argument('--dataset', type=str, default='DOTA')
-    parser.add_argument('--train_path', type=str, default='DOTA/train.txt')
-    parser.add_argument('--test_path', type=str, default='DOTA/test.txt')
+    parser.add_argument('--train_path', type=str, default='train.txt')
+    parser.add_argument('--test_path', type=str, default='test.txt')
 
     parser.add_argument('--training_size', type=int, default=800)
-    parser.add_argument('--resume', action='store_true', help='resume training from last.pth')
-    parser.add_argument('--load', action='store_true', help='load training from last.pth')
+    parser.add_argument('--resume', action='store_true', help='resume training from last.pdparams')
+    parser.add_argument('--load', action='store_true', help='load training from last.pdparams')
     parser.add_argument('--augment', action='store_true', help='data augment')
     parser.add_argument('--target_size', type=int, default=[800])   
     #

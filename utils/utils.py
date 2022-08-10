@@ -53,6 +53,10 @@ def is_image(filename):
     return any(filename.endswith(ext) for ext in [".bmp", ".png", ".jpg", ".jpeg", ".JPG"])
 
 
+def draw_caption(image, box, caption):
+    b = np.array(box).astype(int)
+    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 2)
+
 def sort_corners(quads):
     sorted_ = np.zeros(quads.shape, dtype=np.float32)
     for i, corners in enumerate(quads):
@@ -90,6 +94,81 @@ def sort_corners(quads):
             sorted_[i, j*2] = corners[idx*2]
             sorted_[i, j*2+1] = corners[idx*2+1]
     return sorted_
+
+
+def get_DOTA_points(label_path, rotate=False):
+    if not os.path.exists(label_path):
+        return []
+    with open(label_path,'r') as f:        
+        contents=f.read()
+        lines=contents.split('\n')
+        lines = [x for x in contents.split('\n')  if x]	 
+
+        object_coors=[]	
+        for object in lines:
+            coors = object.split(' ')
+            coors = [int(eval(x)) for x in coors[:-1]]
+            x0 = coors[0]; y0 = coors[1]; x1 = coors[2]; y1 = coors[3]
+            x2 = coors[4]; y2 = coors[5]; x3 = coors[6]; y3 = coors[7]
+            object_coors.append(np.array([x0,y0,x1,y1,x2,y2,x3,y3]).reshape(4,2).astype(np.int32))
+    return object_coors  
+
+
+def show_dota_results(img_path, label_path):
+    save_path = 'dota_res'
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
+    merged_files = os.listdir(save_path)
+    func = get_DOTA_points
+    # for folder
+    if os.path.isdir(img_path) and os.path.isdir(label_path):
+        img_files = os.listdir(img_path)
+        xml_files = os.listdir(label_path)
+        img_files.sort()	
+        xml_files.sort()
+        
+        img_names = [os.path.splitext(x)[0] for x in img_files]
+        xml_names = [os.path.splitext(x)[0] for x in xml_files]
+        for img_name in img_names:
+            if img_name not in xml_names:
+                img_files.remove(img_name+'.png')
+        # import ipdb;ipdb.set_trace()
+        assert len(img_files) == len(xml_files), 'Not matched between imgs and res!'
+        iterations = zip(img_files,xml_files)
+        for iter in iterations:
+            if iter[0] in merged_files:
+                continue
+            assert os.path.splitext(iter[0])[0]==os.path.splitext(iter[1])[0],'unmatched images and labels!'   
+            # object_coors = get_yolo_points(os.path.join(label_path,iter[1]), rotate=True)
+            if not iter[0].endswith('.txt'):
+                object_coors = func(os.path.join(label_path,iter[1]),True)
+                if len(object_coors):
+                    drawbox(os.path.join(img_path,iter[0]),object_coors, save_path =save_path )
+                else:
+                    print('No obj!')
+    
+    # for single img
+    elif os.path.isfile(label_path):
+        object_coors = func(os.path.join(label_path),rotate=False)
+        if len(object_coors):
+            drawbox(img_path,object_coors,False)
+    else:
+        print('Path Not Matched!!!')
+
+
+def drawbox(img_path,object_coors,save_flag=True,save_path=None):
+    print(img_path)
+
+    img=cv2.imread(img_path,1)
+    for coor in object_coors:
+        img = cv2.polylines(img,[coor],True,(0,0,255),2)	
+        if save_flag:
+            cv2.imwrite(os.path.join(save_path,os.path.split(img_path)[1]), img)
+        else: 
+            cv2.imshow(img_path,img)
+            cv2.moveWindow(img_path,100,100)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
 
 def rescale(im, target_size, max_size, keep_ratio, multiple=32):
@@ -171,3 +250,16 @@ def plot_gt(img, bboxes, im_path, mode='xyxyxyxy'):
         img = cv2.polylines(cv2.UMat(img),[box.reshape(-1,2).astype(np.int32)],True,(0,0,255),2)
         cv2.imwrite(os.path.join('temp','augment_%s' % (os.path.split(im_path)[1])),img)
     print('Check augmentation results in `temp` folder!!!')
+    
+    
+def model_info(model, report='summary'):
+    # Plots a line-by-line description of a PyTorch model
+    n_p = sum(x.numel() for x in model.parameters())  # number parameters
+    n_g = sum(x.numel() for x in model.parameters() if not x.stop_gradient)  # number gradients
+    if report == 'full':
+        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
+        for i, (name, p) in enumerate(model.named_parameters()):
+            name = name.replace('module_list.', '')
+            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
+    print('Model Summary: %d layers, %d parameters, %d gradients' % (len(list(model.parameters())), n_p, n_g))

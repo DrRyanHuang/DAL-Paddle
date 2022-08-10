@@ -33,15 +33,15 @@ DATASETS = {
     # 'NWPU_VHR':NWPUDataset
             }
 
-def make_zip(source_dir, output_filename):
-    zipf = zipfile.ZipFile(output_filename, 'w')
-    # pre_len = len(os.path.dirname(source_dir))
-    for parent, dirnames, filenames in os.walk(source_dir):
-        for filename in filenames:
-            pathfile = os.path.join(parent, filename)
-            # arcname = pathfile[pre_len:].strip(os.path.sep)
-            zipf.write(pathfile, filename)
-    zipf.close()
+# def make_zip(source_dir, output_filename):
+#     zipf = zipfile.ZipFile(output_filename, 'w')
+#     # pre_len = len(os.path.dirname(source_dir))
+#     for parent, dirnames, filenames in os.walk(source_dir):
+#         for filename in filenames:
+#             pathfile = os.path.join(parent, filename)
+#             # arcname = pathfile[pre_len:].strip(os.path.sep)
+#             zipf.write(pathfile, filename)
+#     zipf.close()
 
 
 # def icdar_evaluate(model, 
@@ -162,10 +162,13 @@ def dota_evaluate(model,
                   target_size, 
                   test_path,
                   conf = 0.01):
-    # 
-    root_data, evaldata = os.path.split(test_path)
-    splitdata = evaldata + 'split'
-    ims_dir = os.path.join(root_data, splitdata + '/' + 'images')
+    
+    # root_data, evaldata = os.path.split(test_path)
+    # splitdata = evaldata + 'split'
+    # ims_dir = os.path.join(root_data, splitdata + '/' + 'images')
+    # root_data, evaldata
+    ims_dir = r"C:\Users\zihao\Desktop\DAL\DOTA-v2.0\train\images\part4"
+    
     root_dir = 'outputs'
     res_dir = os.path.join(root_dir, 'detections')          # 裁剪图像的检测结果   
     integrated_dir = os.path.join(root_dir, 'integrated')   # 将裁剪图像整合后成15个txt的结果
@@ -202,6 +205,9 @@ def dota_evaluate(model,
                     res[k, 4], res[k, 5], res[k, 6], res[k, 7],
                     ds.return_class(dets[k, 0]), im_name[:-4], dets[k, 1],)
                 )
+                
+        if idx > 10:
+            break
     ResultMerge(res_dir, integrated_dir, merged_dir)
     ## calc mAP
     mAP, classaps = task1_eval(merged_dir, test_path)
@@ -247,7 +253,8 @@ def evaluate(target_size,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparams')
     parser.add_argument('--backbone', dest='backbone', default='res50', type=str)
-    parser.add_argument('--weight', type=str, default='weights/best.pth')
+    # parser.add_argument('--weight', type=str, default='weights/best.pth')
+    parser.add_argument('--weight', type=str, default='None')
     parser.add_argument('--target_size', dest='target_size', default=[800], type=int) 
     parser.add_argument('--hyp', type=str, default='hyp.py', help='hyper-parameter path')
 

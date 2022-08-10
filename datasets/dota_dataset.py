@@ -7,7 +7,7 @@ from paddle.io import Dataset
 from utils.augment import Augment, HSV, HorizontalFlip, VerticalFlip, \
     Affine, Noise, Blur
 # from utils.utils import plot_gt
-from utils.bbox import mask_valid_boxes 
+from utils.bbox import mask_valid_boxes, quad_2_rbox
 
 
 class DOTADataset(Dataset):
@@ -77,15 +77,18 @@ class DOTADataset(Dataset):
 
 
     def _load_annotation(self, index):
-        root_dir = index.split('/images/P')[0]
-        label_dir = os.path.join(root_dir, 'labelTxt')
+        root_dir = index.split(r'\part1\images')[0]
+        label_dir = os.path.join(root_dir, r'labelTxt')
         _ , img_name = os.path.split(index)
         filename = os.path.join(label_dir, img_name[:-4]+'.txt')
+        assert os.path.exists(filename)
         boxes, gt_classes = [], []
         with open(filename,'r',encoding='utf-8-sig') as f:
             content = f.read()
             objects = content.split('\n')
             for obj in objects:
+                if obj.startswith("imagesource:") or obj.startswith("gsd:"):
+                    continue
                 if len(obj) != 0 :
                     *box, class_name, difficult = obj.split(' ')
                     if difficult == '1' or difficult == '2':

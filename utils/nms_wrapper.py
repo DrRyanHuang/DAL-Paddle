@@ -7,7 +7,7 @@
 # --------------------------------------------------------
 import paddle
 
-from utils.nms.cpu_nms import cpu_nms, cpu_soft_nms
+# from utils.nms.cpu_nms import cpu_nms, cpu_soft_nms
 
 
 def nms(dets, thresh, use_gpu=True):

@@ -3,12 +3,13 @@ from __future__ import print_function
 import os
 import cv2
 import time
-import torch
+# import torch
+import paddle
 import random
 import shutil
 import argparse
 import numpy as np
-from datasets import *
+from datasets import DOTADataset
 from models.model import RetinaNet
 from utils.detect import im_detect
 from utils.bbox import rbox_2_quad
@@ -32,7 +33,7 @@ def demo(args):
     ds = DATASETS[args.dataset](level = 1)
     model = RetinaNet(backbone=args.backbone, hyps=hyps)
     if args.weight.endswith('.pth'):
-        chkpt = torch.load(args.weight)
+        chkpt = paddle.load(args.weight)
         # load model
         if 'model' in chkpt.keys():
             model.load_state_dict(chkpt['model'])
@@ -120,10 +121,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparams')
     parser.add_argument('--backbone', type=str, default='res50')
     parser.add_argument('--hyp', type=str, default='hyp.py', help='hyper-parameter path')
-    parser.add_argument('--weight', type=str, default='weights/last.pth')
+    # parser.add_argument('--weight', type=str, default='weights/last.pth')
+    parser.add_argument('--weight', type=str, default='None')
 
-    parser.add_argument('--dataset', type=str, default='HRSC2016')
-    parser.add_argument('--ims_dir', type=str, default='samples')   
+    parser.add_argument('--dataset', type=str, default='DOTA')
+    parser.add_argument('--ims_dir', type=str, default='/home/aistudio/data/data163333/images')   
     
     parser.add_argument('--target_size', type=int, default=[800])
     demo(parser.parse_args())
