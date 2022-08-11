@@ -20,6 +20,7 @@ from os import fspath
 
 train_list = []
 train_img_root = r"C:\Users\zihao\Desktop\DAL\train\part1\images" # <---- 在此处写上你的数据根目录
+assert os.path.exists(train_img_root)
 for imgObj in Path(train_img_root).glob("**/*.png"):
     
     img_path = fspath(imgObj)
@@ -32,7 +33,7 @@ for imgObj in Path(train_img_root).glob("**/*.png"):
     train_list.append(img_path)
 
 write_str = ""
-train_txt = r"..\train.txt"         # <---- 在此处写上你的txt输出目录
+train_txt = r"../train.txt"         # <---- 在此处写上你的txt输出目录
 
 # for item in train_list:
 #     write_str += sep.join(item) + "\n"

@@ -8,6 +8,33 @@ from utils.box_coder import BoxCoder
 from utils.overlaps.rbox_overlaps import rbox_overlaps as rbbx_overlaps
 # from utils.overlaps_cuda.rbbox_overlaps import rbbx_overlaps
 
+def fuck_paddle_idx(inp, mask):
+    
+    if len(inp.shape)==2:
+        m, n = inp.shape
+        idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+        
+        if idx.shape[0] == 0:
+            return paddle.to_tensor(np.zeros(shape=(0, n)))
+        
+        return paddle.index_select(inp, idx, axis=0)
+    
+    elif len(inp.shape)==1:
+        m = len(inp)
+        idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+        
+        if idx.shape[0] == 0:
+            return paddle.to_tensor(np.zeros(shape=(0,)))
+        
+        return paddle.index_select(inp, idx, axis=0)
+    
+    
+def boolidx2tensor(mask):
+    assert len(mask.shape)==1
+    m = len(mask)
+    idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
+    return idx
+
 
 def xyxy2xywh_a(query_boxes):
     out_boxes = query_boxes.copy()
@@ -66,32 +93,7 @@ class IntegratedLoss(nn.Layer):
             # # https://github.com/PaddlePaddle/Paddle/issues/45007
             
             
-            def fuck_paddle_idx(inp, mask):
-                
-                if len(inp.shape)==2:
-                    m, n = inp.shape
-                    idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
-                    
-                    if idx.shape[0] == 0:
-                        return paddle.to_tensor(np.zeros(shape=(0, n)))
-                    
-                    return paddle.index_select(inp, idx, axis=0)
-                
-                elif len(inp.shape)==1:
-                    m = len(inp)
-                    idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
-                    
-                    if idx.shape[0] == 0:
-                        return paddle.to_tensor(np.zeros(shape=(0,)))
-                    
-                    return paddle.index_select(inp, idx, axis=0)
-                
-                
-            def boolidx2tensor(mask):
-                assert len(mask.shape)==1
-                m = len(mask)
-                idx = paddle.to_tensor(np.arange(m, dtype="int32")[mask.numpy()])
-                return idx
+
             
             
             if bbox_annotation.shape[0] == 0:

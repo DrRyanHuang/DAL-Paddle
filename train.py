@@ -122,17 +122,23 @@ def train_model(args, hyps):
         chkpt = paddle.load(weight)
         # load model
         if 'model' in chkpt.keys() :
-            model.load_state_dict(chkpt['model'])
+            model.set_state_dict(chkpt['model'])
         else:
-            model.load_state_dict(chkpt)
+            model.set_state_dict(chkpt)
         # load optimizer
         if 'optimizer' in chkpt.keys() and chkpt['optimizer'] is not None and args.resume :
-            optimizer.load_state_dict(chkpt['optimizer'])
-            best_fitness = chkpt['best_fitness']
-            for state in optimizer.state.values():
-                for k, v in state.items():
-                    if isinstance(v, paddle.Tensor):
-                        state[k] = v.cuda()
+            scheduler.set_state_dict(chkpt['optimizer']["LR_Scheduler"])
+            
+            # 存在 bug
+            # optimizer.set_state_dict(chkpt['optimizer'])
+            # best_fitness = chkpt['best_fitness']
+            # for state in optimizer.state.values():
+            #     for k, v in state.items():
+            #         if isinstance(v, paddle.Tensor):
+            #             state[k] = v.cuda()
+            # https://www.paddlepaddle.org.cn/documentation/docs/zh/api/paddle/save_cn.html#save
+            # 2. 对于 Optimizer.state_dict ，推荐使用后缀 .pdopt
+            
         # load results
         if 'training_results' in chkpt.keys() and  chkpt.get('training_results') is not None and args.resume:
             with open(results_file, 'w') as file:
@@ -218,21 +224,22 @@ def train_model(args, hyps):
         final_epoch = epoch + 1 == epochs
         
         # eval
-        if hyps['test_interval']!= -1 and epoch % hyps['test_interval'] == 0 and epoch > 30 :
+        # if hyps['test_interval']!= -1 and epoch % hyps['test_interval'] == 0 and epoch > 30 :
+        if True:
             if paddle.device.cuda.device_count() > 1:
                 results = evaluate(target_size=args.target_size,
-                                   test_path=args.test_path,
-                                   dataset=args.dataset,
-                                   model=model.module, 
-                                   hyps=hyps,
-                                   conf = 0.01 if final_epoch else 0.1)    
+                                    test_path=args.test_path,
+                                    dataset=args.dataset,
+                                    model=model.module, 
+                                    hyps=hyps,
+                                    conf = 0.01 if final_epoch else 0.1)    
             else:
                 results = evaluate(target_size=args.target_size,
-                                   test_path=args.test_path,
-                                   dataset=args.dataset,
-                                   model=model,
-                                   hyps=hyps,
-                                   conf = 0.01 if final_epoch else 0.1) #  p, r, map, f1
+                                    test_path=args.test_path,
+                                    dataset=args.dataset,
+                                    model=model,
+                                    hyps=hyps,
+                                    conf = 0.01 if final_epoch else 0.1) #  p, r, map, f1
 
         
         # Write result log
@@ -287,7 +294,7 @@ if __name__ == '__main__':
     # NWPU-VHR10
     parser.add_argument('--dataset', type=str, default='DOTA')
     parser.add_argument('--train_path', type=str, default='train.txt')
-    parser.add_argument('--test_path', type=str, default='test.txt')
+    parser.add_argument('--test_path', type=str, default='train.txt')
 
     parser.add_argument('--training_size', type=int, default=800)
     parser.add_argument('--resume', action='store_true', help='resume training from last.pdparams')

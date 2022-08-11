@@ -32,13 +32,13 @@ def demo(args):
     hyps = hyp_parse(args.hyp)
     ds = DATASETS[args.dataset](level = 1)
     model = RetinaNet(backbone=args.backbone, hyps=hyps)
-    if args.weight.endswith('.pth'):
+    if args.weight.endswith('.pdparams'):
         chkpt = paddle.load(args.weight)
         # load model
         if 'model' in chkpt.keys():
-            model.load_state_dict(chkpt['model'])
+            model.set_state_dict(chkpt['model'])
         else:
-            model.load_state_dict(chkpt)
+            model.set_state_dict(chkpt)
         print('load weight from: {}'.format(args.weight))
     model.eval()
 
@@ -114,7 +114,7 @@ def demo(args):
         label_path = 'outputs/dota_out'
         save_imgs =  False
         if save_imgs:
-            show_dota_results(img_path,label_path)
+            show_dota_results(img_path, label_path)
     print('Done. (%.3fs)' % (time.time() - t0))
 
 if __name__ == '__main__':
@@ -122,10 +122,10 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='res50')
     parser.add_argument('--hyp', type=str, default='hyp.py', help='hyper-parameter path')
     # parser.add_argument('--weight', type=str, default='weights/last.pth')
-    parser.add_argument('--weight', type=str, default='None')
+    parser.add_argument('--weight', type=str, default='weights/last.pdparams')
 
     parser.add_argument('--dataset', type=str, default='DOTA')
-    parser.add_argument('--ims_dir', type=str, default='/home/aistudio/data/data163333/images')   
+    parser.add_argument('--ims_dir', type=str, default='')   
     
     parser.add_argument('--target_size', type=int, default=[800])
     demo(parser.parse_args())

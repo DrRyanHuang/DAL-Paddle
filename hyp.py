@@ -4,8 +4,8 @@ warmup_lr: 0.00001
 warm_epoch:5
 
 
-# setting
-num_classes: 10
+# setting # 背景类不算
+num_classes: 15
 
 # training
 epochs: 100

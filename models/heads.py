@@ -21,7 +21,7 @@ class CLSHead(nn.Layer):
             self.convs.append(nn.Conv2D(chns, feat_channels, 3, 1, 1))
             self.convs.append(nn.ReLU())
         self.head = nn.Conv2D(feat_channels, num_anchors*num_classes, 3, 1, 1)
-        self.init_weights()
+        # self.init_weights()
 
     def init_weights(self):
         for m in self.sublayers():
@@ -49,6 +49,7 @@ class CLSHead(nn.Layer):
                 m.bias.set_value(new_bias)
                 
         prior = 0.01
+        
         # self.head.weight.data.fill_(0)
         new_weight = paddle.zeros(shape=self.head.weight.shape, 
                                   dtype=self.head.weight.dtype)
@@ -88,7 +89,7 @@ class REGHead(nn.Layer):
             self.convs.append(nn.Conv2D(chns, feat_channels, 3, 1, 1))
             self.convs.append(nn.ReLU())
         self.head = nn.Conv2D(feat_channels, num_anchors*num_regress, 3, 1, 1)
-        self.init_weights()
+        # self.init_weights()
 
 
     

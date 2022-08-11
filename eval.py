@@ -163,11 +163,12 @@ def dota_evaluate(model,
                   test_path,
                   conf = 0.01):
     
-    # root_data, evaldata = os.path.split(test_path)
+    test_path = r"C:\Users\zihao\Desktop\DAL\train\part1"
+    
+    root_data = test_path
+    root_data = "." if root_data =="" else root_data
     # splitdata = evaldata + 'split'
-    # ims_dir = os.path.join(root_data, splitdata + '/' + 'images')
-    # root_data, evaldata
-    ims_dir = r"C:\Users\zihao\Desktop\DAL\DOTA-v2.0\train\images\part4"
+    ims_dir = os.path.join(root_data, 'images')
     
     root_dir = 'outputs'
     res_dir = os.path.join(root_dir, 'detections')          # 裁剪图像的检测结果   

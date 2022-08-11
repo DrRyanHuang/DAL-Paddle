@@ -12,6 +12,7 @@ from models.fpn import FPN, LastLevelP6P7
 from models.heads import CLSHead, REGHead #, MultiHead
 from models.anchors import Anchors
 from models.losses import IntegratedLoss #, KLLoss
+from models.losses import fuck_paddle_idx, boolidx2tensor
 
 from utils.nms_wrapper import nms
 from utils.box_coder import BoxCoder
@@ -107,28 +108,47 @@ class RetinaNet(nn.Layer):
             return losses
 
         else:   # eval() mode
+            test_conf = 0.99
             return self.decoder(ims, anchors_list[-1], cls_score, bbox_pred, test_conf=test_conf)
 
 
     def decoder(self, ims, anchors, cls_score, bbox_pred, thresh=0.6, nms_thresh=0.2, test_conf=None):
         if test_conf is not None:
             thresh = test_conf
+            
         bboxes = self.box_coder.decode(anchors, bbox_pred, mode='xywht')
         bboxes = clip_boxes(bboxes, ims)
         scores = paddle.max(cls_score, axis=2, keepdim=True)
         keep = (scores >= thresh)[0, :, 0]
         if keep.sum() == 0:
             return [paddle.zeros((1,)), paddle.zeros((1,)), paddle.zeros((1, 5))]
-        scores = scores[:, keep, :]
-        anchors = anchors[:, keep, :]
-        cls_score = cls_score[:, keep, :]
-        bboxes = bboxes[:, keep, :]
+        keep = boolidx2tensor(keep)
+        
+        # scores = scores[:, keep]
+        # anchors = anchors[:, keep]
+        # cls_score = cls_score[:, keep]
+        # bboxes = bboxes[:, keep]
+        
+        scores = paddle.index_select(x=scores, index=keep, axis=1)
+        anchors = paddle.index_select(x=anchors, index=keep, axis=1)
+        cls_score = paddle.index_select(x=cls_score, index=keep, axis=1)
+        bboxes = paddle.index_select(x=bboxes, index=keep, axis=1)
+        
+        
         # NMS
         anchors_nms_idx = nms(paddle.concat([bboxes, scores], axis=2)[0, :, :], nms_thresh)
-        nms_scores, nms_class = cls_score[0, anchors_nms_idx, :].max(dim=1)
+        anchors_nms_idx = paddle.to_tensor(anchors_nms_idx)
+        
+        res_cls_score = paddle.index_select(x=cls_score, index=anchors_nms_idx, axis=1)[0]
+        
+        # nms_scores, nms_class = cls_score[0, anchors_nms_idx].max(dim=1)
+        nms_scores, nms_class = res_cls_score.max(1),  res_cls_score.argmax(1)
         output_boxes = paddle.concat([
-            bboxes[0, anchors_nms_idx, :],
-            anchors[0, anchors_nms_idx, :]],
+            # bboxes[0, anchors_nms_idx, :],
+            # anchors[0, anchors_nms_idx, :]],
+            paddle.index_select(x=bboxes,  index=anchors_nms_idx, axis=1)[0],
+            paddle.index_select(x=anchors, index=anchors_nms_idx, axis=1)[0],
+            ],
             axis=1
         )
         return [nms_scores, nms_class, output_boxes]
