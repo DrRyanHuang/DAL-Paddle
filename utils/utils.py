@@ -36,7 +36,7 @@ def hyp_parse(hyp_path):
     """
     hyp = {}
     keys = [] 
-    with open(hyp_path,'r') as f:
+    with open(hyp_path,'r', encoding="utf-8") as f:
         for line in f:
             if line.startswith('#') or len(line.strip())==0 : continue
             v = line.strip().split(':')

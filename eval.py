@@ -163,7 +163,7 @@ def dota_evaluate(model,
                   test_path,
                   conf = 0.01):
     
-    test_path = r"C:\Users\zihao\Desktop\DAL\train\part1"
+    test_path = r"C:\Users\zihao\Desktop\DAL\DOTA_devkit\examplesplit"
     
     root_data = test_path
     root_data = "." if root_data =="" else root_data
@@ -207,7 +207,7 @@ def dota_evaluate(model,
                     ds.return_class(dets[k, 0]), im_name[:-4], dets[k, 1],)
                 )
                 
-        if idx > 10:
+        if idx > 3:
             break
     ResultMerge(res_dir, integrated_dir, merged_dir)
     ## calc mAP

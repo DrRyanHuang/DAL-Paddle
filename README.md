@@ -59,6 +59,14 @@ python setup.py build_ext --inplace
 
 
 
+### DOTA数据集准备工作
+
+家人们，破大防了呀，第一次用这个DOTA数据集，原仓库的大佬神马都没说，代码全靠猜hhhh
+
+先把这个链接放上
+https://github.com/CAPTAIN-WHU/DOTA_devkit
+
+
 ### Inference
 You can use the following command to test a dataset. Note that `weight`, `img_dir`, `dataset`,`hyp` should be modified as appropriate.
 ```

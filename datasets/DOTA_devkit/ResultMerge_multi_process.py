@@ -230,6 +230,13 @@ def mergebase_parallel(srcpath, dstpath, nms):
     filelist = util.GetFileFromThisRootDir(srcpath)
 
     mergesingle_fn = partial(mergesingle, dstpath, nms)
+    
+    
+    # ---------- DEBUG ----------
+    mergesingle(dstpath, nms, filelist[0])
+    
+    # ---------- DEBUG ----------
+    
     # pdb.set_trace()
     pool.map(mergesingle_fn, filelist)
 

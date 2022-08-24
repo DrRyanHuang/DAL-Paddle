@@ -12,3 +12,4 @@ utils/nms/build/*
 utils/overlaps/build/*
 utils/overlaps_cuda/build/*
 weights/*
+.vscode/*

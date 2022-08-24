@@ -279,10 +279,13 @@ def detections2Task1(srcpath, dstpath):
 
         subname = custombasename(filepath)
         pattern2 = re.compile(r'__([\d+\.]+)__\d+___')
-        rate = re.findall(pattern2, subname)[0]
+        # rate = re.findall(pattern2, subname)[0]
 
         for obj in objects:
             category = obj['classname']
             poly = obj['poly']
             outline = obj['filename'] + ' ' + str(obj['conf']) + ' ' + ' '.join(map(str, poly))
             filedict[category].write(outline + '\n')
+
+    for cls in wordname_15:
+        filedict[cls].close() 
