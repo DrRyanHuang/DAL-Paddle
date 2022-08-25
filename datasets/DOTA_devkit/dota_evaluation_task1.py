@@ -205,7 +205,7 @@ def voc_eval(detpath,
     for imagename in imagenames:
         R = [obj for obj in recs[imagename] if obj['name'] == classname]
         bbox = np.array([x['bbox'] for x in R])
-        difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
+        difficult = np.array([x['difficult'] for x in R]).astype(bool)
         det = [False] * len(R)
         npos = npos + sum(~difficult)
         class_recs[imagename] = {'bbox': bbox,
@@ -349,12 +349,12 @@ def eval_map(detpath,annopath,imagesetfile, use_07_metric=False):
         classaps.append(ap)
 
         # umcomment to show p-r curve of each category
-        plt.figure(figsize=(8,4))
-        plt.xlabel('recall')
-        plt.ylabel('precision')
-        plt.plot(rec, prec)
-        plt.show()
-        plt.savefig('PR-curve')
+        # plt.figure(figsize=(8,4))
+        # plt.xlabel('recall')
+        # plt.ylabel('precision')
+        # plt.plot(rec, prec)
+        # plt.show()
+        # plt.savefig('PR-curve')
     map = map/len(classnames)
     # print('map:', map)
     classaps = 100*np.array(classaps)

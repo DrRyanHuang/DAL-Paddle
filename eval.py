@@ -163,52 +163,45 @@ def dota_evaluate(model,
                   test_path,
                   conf = 0.01):
     
-    test_path = r"C:\Users\zihao\Desktop\DAL\DOTA_devkit\examplesplit"
-    
-    root_data = test_path
-    root_data = "." if root_data =="" else root_data
-    # splitdata = evaldata + 'split'
-    ims_dir = os.path.join(root_data, 'images')
-    
+    root_data, evaldata = os.path.split(test_path)
+    splitdata = evaldata + 'split'
+    ims_dir = os.path.join(root_data, splitdata + '/' + 'images')
     root_dir = 'outputs'
     res_dir = os.path.join(root_dir, 'detections')          # 裁剪图像的检测结果   
     integrated_dir = os.path.join(root_dir, 'integrated')   # 将裁剪图像整合后成15个txt的结果
     merged_dir = os.path.join(root_dir, 'merged')           # 将整合后的结果NMS
 
-    if  os.path.exists(root_dir):
-        shutil.rmtree(root_dir)
-    os.makedirs(root_dir)
+    # if  os.path.exists(root_dir):
+    #     shutil.rmtree(root_dir)
+    # os.makedirs(root_dir)
 
-    for f in [res_dir, integrated_dir, merged_dir]: 
-        if os.path.exists(f):
-            shutil.rmtree(f)
-        os.makedirs(f)
+    # for f in [res_dir, integrated_dir, merged_dir]: 
+    #     if os.path.exists(f):
+    #         shutil.rmtree(f)
+    #     os.makedirs(f)
 
     ds = DOTADataset()
     # loss = torch.zeros(3)
     ims_list = [x for x in os.listdir(ims_dir) if is_image(x)]
     s = ('%20s' + '%10s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@0.5', 'Hmean')
     nt = 0
-    for idx, im_name in enumerate(tqdm(ims_list, desc=s)):
-        im_path = os.path.join(ims_dir, im_name)
-        im = cv2.cvtColor(cv2.imread(im_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-        dets = im_detect(model, im, target_sizes=target_size, conf = conf)
-        nt += len(dets)
-        out_file = os.path.join(res_dir,  im_name[:im_name.rindex('.')] + '.txt')
-        with codecs.open(out_file, 'w', 'utf-8') as f:
-            if dets.shape[0] == 0:
-                f.close()
-                continue
-            res = sort_corners(rbox_2_quad(dets[:, 2:]))
-            for k in range(dets.shape[0]):
-                f.write('{:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {} {} {:.2f}\n'.format(
-                    res[k, 0], res[k, 1], res[k, 2], res[k, 3],
-                    res[k, 4], res[k, 5], res[k, 6], res[k, 7],
-                    ds.return_class(dets[k, 0]), im_name[:-4], dets[k, 1],)
-                )
-                
-        if idx > 3:
-            break
+    # for idx, im_name in enumerate(tqdm(ims_list, desc=s)):
+    #     im_path = os.path.join(ims_dir, im_name)
+    #     im = cv2.cvtColor(cv2.imread(im_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+    #     dets = im_detect(model, im, target_sizes=target_size, conf = conf)
+    #     nt += len(dets)
+    #     out_file = os.path.join(res_dir,  im_name[:im_name.rindex('.')] + '.txt')
+    #     with codecs.open(out_file, 'w', 'utf-8') as f:
+    #         if dets.shape[0] == 0:
+    #             f.close()
+    #             continue
+    #         res = sort_corners(rbox_2_quad(dets[:, 2:]))
+    #         for k in range(dets.shape[0]):
+    #             f.write('{:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {} {} {:.2f}\n'.format(
+    #                 res[k, 0], res[k, 1], res[k, 2], res[k, 3],
+    #                 res[k, 4], res[k, 5], res[k, 6], res[k, 7],
+    #                 ds.return_class(dets[k, 0]), im_name[:-4], dets[k, 1],)
+    #             )
     ResultMerge(res_dir, integrated_dir, merged_dir)
     ## calc mAP
     mAP, classaps = task1_eval(merged_dir, test_path)
@@ -263,6 +256,9 @@ if __name__ == '__main__':
     parser.add_argument('--test_path', type=str, default='DOTA/test.txt') 
 
     arg = parser.parse_args()
+    arg.test_path = r"C:\Users\zihao\Desktop\DAL\DOTA_devkit\example"
+    arg.weight = "None"
+
     hyps = hyp_parse(arg.hyp)
     evaluate(arg.target_size,
              arg.test_path,

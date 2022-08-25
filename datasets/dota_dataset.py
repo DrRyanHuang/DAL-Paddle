@@ -59,7 +59,7 @@ class DOTADataset(Dataset):
         for i, bbox in enumerate(bboxes):
             gt_boxes[i, :5] = quad_2_rbox(np.array(bbox), mode = 'xyxya')   
             gt_boxes[i, 5] = classes[i]
-            
+
         ## test augmentation
         # plot_gt(im, gt_boxes[:,:-1], im_path, mode = 'xyxya')
         return {'image': im, 'boxes': gt_boxes, 'path': im_path}
@@ -77,18 +77,19 @@ class DOTADataset(Dataset):
 
 
     def _load_annotation(self, index):
-        root_dir = index.split(r'\part1\images')[0]
-        label_dir = os.path.join(root_dir, r'labelTxt')
+
+        # 注意这里如果是windows, 则可能有bug
+        # root_dir = index.split('/images/P')[0]
+        root_dir = index.split('\\images\\P')[0]
+
+        label_dir = os.path.join(root_dir, 'labelTxt')
         _ , img_name = os.path.split(index)
         filename = os.path.join(label_dir, img_name[:-4]+'.txt')
-        assert os.path.exists(filename)
         boxes, gt_classes = [], []
         with open(filename,'r',encoding='utf-8-sig') as f:
             content = f.read()
             objects = content.split('\n')
             for obj in objects:
-                if obj.startswith("imagesource:") or obj.startswith("gsd:"):
-                    continue
                 if len(obj) != 0 :
                     *box, class_name, difficult = obj.split(' ')
                     if difficult == '1' or difficult == '2':
@@ -97,11 +98,6 @@ class DOTADataset(Dataset):
                     label = self.class_to_ind[class_name] 
                     boxes.append(box)
                     gt_classes.append(label)
-            
-        if len(boxes) == 0:
-            return {'boxes': np.zeros(((0, 8)), dtype=np.int32), 
-                    'gt_classes': np.array((0,), dtype=np.int32)}
-                    
         return {'boxes': np.array(boxes, dtype=np.int32), 'gt_classes': np.array(gt_classes)}
 
 

@@ -304,6 +304,8 @@ if __name__ == '__main__':
     #
 
     arg = parser.parse_args()
+    arg.train_path = r"C:\Users\zihao\Desktop\DAL\DOTA_devkit\examplesplit\train.txt" # 写有每张图片绝对路径的txt
+    arg.load = True
     hyps = hyp_parse(arg.hyp)
     print(arg)
     print(hyps)

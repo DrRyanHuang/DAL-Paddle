@@ -19,8 +19,10 @@ from os import fspath
 
 
 train_list = []
-train_img_root = r"C:\Users\zihao\Desktop\DAL\train\part1\images" # <---- 在此处写上你的数据根目录
+train_img_root = r"..\..\DAL\DOTA_devkit\examplesplit\images" # <---- 在此处写上你的数据根目录
 assert os.path.exists(train_img_root)
+train_img_root = os.path.abspath(train_img_root) # 转化为绝对路径
+
 for imgObj in Path(train_img_root).glob("**/*.png"):
     
     img_path = fspath(imgObj)
@@ -33,7 +35,7 @@ for imgObj in Path(train_img_root).glob("**/*.png"):
     train_list.append(img_path)
 
 write_str = ""
-train_txt = r"../train.txt"         # <---- 在此处写上你的txt输出目录
+train_txt = r"..\..\DAL\DOTA_devkit\examplesplit\train.txt"         # <---- 在此处写上你的txt输出目录
 
 # for item in train_list:
 #     write_str += sep.join(item) + "\n"
@@ -41,7 +43,7 @@ train_txt = r"../train.txt"         # <---- 在此处写上你的txt输出目录
 write_str = "\n".join(train_list)
 
 with open(train_txt, "w") as f:
-    f.write(write_str)
+    f.write(write_str) 
 
 print("文件写入完毕")
 
