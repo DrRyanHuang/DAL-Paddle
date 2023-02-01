@@ -8,7 +8,7 @@ import argparse
 import math
 import shapely
 import cv2
-from shapely.geometry import Polygon, MultiPoint  #多边形
+from shapely.geometry import Polygon,MultiPoint  #多边形
 from shapely.geometry import Polygon
 import numpy as np
 from tqdm import tqdm
@@ -292,7 +292,7 @@ def eval_mAP(root_dir, use_07_metric = False, thres = 0.5):
     # args = parser.parse_args()
 
     no_animation = False
-    no_plot = False
+    no_plot = True
     quiet = False
     ignore = None
     set_class_iou = None
@@ -323,7 +323,7 @@ def eval_mAP(root_dir, use_07_metric = False, thres = 0.5):
 
     # try to import OpenCV if the user didn't choose the option --no-animation
     show_animation = False
-    if not  no_animation:
+    if not no_animation:
         try:
             import cv2
             show_animation = True
@@ -333,7 +333,7 @@ def eval_mAP(root_dir, use_07_metric = False, thres = 0.5):
 
     # try to import Matplotlib if the user didn't choose the option --no-plot
     draw_plot = False
-    if not  no_plot:
+    if not no_plot:
         try:
             import matplotlib.pyplot as plt
             draw_plot = True
@@ -392,10 +392,10 @@ def eval_mAP(root_dir, use_07_metric = False, thres = 0.5):
         for line in lines_list:
             try:
                 if "difficult" in line:
-                        class_name, x1, y1, x2, y2, x3, y3, x4, y4, _difficult = line.split()
-                        is_difficult = True
+                    class_name, x1, y1, x2, y2, x3, y3, x4, y4, _difficult = line.split()
+                    is_difficult = True
                 else:
-                        class_name, x1, y1, x2, y2, x3, y3, x4, y4 = line.split()
+                    class_name, x1, y1, x2, y2, x3, y3, x4, y4 = line.split()
             except ValueError:
                 error_msg = "Error: File " + txt_file + " in the wrong format.\n"
                 error_msg += " Expected: <class_name> <x1> <y1> <x2> <y1> <x3> <y3> <x4> <y4>['difficult']\n"
@@ -691,8 +691,8 @@ def eval_mAP(root_dir, use_07_metric = False, thres = 0.5):
             prec = tp[:]
             for idx, val in enumerate(tp):
                 prec[idx] = float(tp[idx]) / (fp[idx] + tp[idx] + 1e-6)
-            #print(prec)
-#             import ipdb;ipdb.set_trace()
+            # print(prec)
+            # import ipdb;ipdb.set_trace()
 
             ap, mrec, mprec = voc_ap(rec[:], prec[:],use_07_metric=use_07_metric)
             sum_AP += ap

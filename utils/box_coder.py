@@ -1,6 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import numpy as np
-# import torch
 import paddle
 
 
@@ -34,8 +33,7 @@ class BoxCoder(object):
         targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
         targets_dw = ww * paddle.log(gt_widths / ex_widths)
         targets_dh = wh * paddle.log(gt_heights / ex_heights)
-        targets_dt = wt * (paddle.tan(gt_thetas / 180.0 * np.pi) - \
-                           paddle.tan(ex_thetas / 180.0 * np.pi))
+        targets_dt = wt * (paddle.tan(gt_thetas / 180.0 * np.pi) - paddle.tan(ex_thetas / 180.0 * np.pi))
 
         targets = paddle.stack(
             (targets_dx, targets_dy, targets_dw, targets_dh, targets_dt), axis=1

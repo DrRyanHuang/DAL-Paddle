@@ -1,0 +1,25 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    // Sorry for adding this file to github repo, it helps me to debug conveniently. 
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--dataset", "VOC",
+                "--train_path", "/home/aistudio/data/data21544/PascalVOC2007/VOC2007_train_val/ImageSets/Main/trainval.txt",
+                "--test_path", "/home/aistudio/data/data21544/PascalVOC2007/VOC2007_test/ImageSets/Main/test.txt",
+                "--resume",
+                // "--fleet",
+                "--amp", "--amp_level", "O1"
+            ]
+        }
+    ]
+}

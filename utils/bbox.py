@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-# import torch
 import paddle
 
 
@@ -37,13 +36,13 @@ def xy2wh(boxes):
 
     return out_boxes
 
-def constraint_theta(bboxes, mode='xywha'):
+def constraint_theta(bboxes, mode = 'xywha'):
     keep_dim = False
     if len(bboxes.shape) == 1:
         keep_dim = True
         if isinstance(bboxes, paddle.Tensor):
             bboxes = bboxes.unsqueeze(0) 
-        if isinstance(bboxes, np.ndarray):
+        if isinstance(bboxes,np.ndarray):
             bboxes = np.expand_dims(bboxes, 0) 
         else: bboxes = [bboxes]
     if isinstance(bboxes, paddle.Tensor):
@@ -70,14 +69,14 @@ def constraint_theta(bboxes, mode='xywha'):
 
 
 def bbox_overlaps(boxes, query_boxes):
-    if not isinstance(boxes, float):   # apex
+    if not isinstance(boxes,float):   # apex
         boxes = boxes.float()
     area = (query_boxes[:, 2] - query_boxes[:, 0]) * \
            (query_boxes[:, 3] - query_boxes[:, 1])
-    iw = paddle.min(paddle.unsqueeze(boxes[:, 2], axis=1), query_boxes[:, 2]) - \
-         paddle.max(paddle.unsqueeze(boxes[:, 0], axis=1), query_boxes[:, 0])
-    ih = paddle.min(paddle.unsqueeze(boxes[:, 3], axis=1), query_boxes[:, 3]) - \
-         paddle.max(paddle.unsqueeze(boxes[:, 1], axis=1), query_boxes[:, 1])
+    iw = paddle.minimum(paddle.unsqueeze(boxes[:, 2], axis=1), query_boxes[:, 2]) - \
+         paddle.maximum(paddle.unsqueeze(boxes[:, 0], 1), query_boxes[:, 0])
+    ih = paddle.minimum(paddle.unsqueeze(boxes[:, 3], axis=1), query_boxes[:, 3]) - \
+         paddle.maximum(paddle.unsqueeze(boxes[:, 1], 1), query_boxes[:, 1])
     iw = paddle.clip(iw, min=0)
     ih = paddle.clip(ih, min=0)
     ua = paddle.unsqueeze((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]), axis=1) + area - iw * ih
@@ -128,7 +127,7 @@ def quad_2_rbox(quads, mode='xyxya'):
         quads = quads[np.newaxis, :]
     rboxes = np.zeros((quads.shape[0], 5), dtype=np.float32)
     for i, quad in enumerate(quads):
-        rbox = cv2.minAreaRect(quad.reshape([4, 2]))    
+        rbox = cv2.minAreaRect(quad.reshape([4, 2])) # 生成最小外接矩形
         x, y, w, h, t = rbox[0][0], rbox[0][1], rbox[1][0], rbox[1][1], rbox[2]
         if np.abs(t) < 45.0:
             rboxes[i, :] = np.array([x, y, w, h, t])
@@ -141,8 +140,8 @@ def quad_2_rbox(quads, mode='xyxya'):
                 rboxes[i, :] = np.array([x, y, h, w, 45])
     # (x_ctr, y_ctr, w, h) -> (x1, y1, x2, y2)
     if mode == 'xyxya':
-        rboxes[:, 0:2] = rboxes[:, 0:2] - rboxes[:, 2:4] * 0.5
-        rboxes[:, 2:4] = rboxes[:, 0:2] + rboxes[:, 2:4]
+        rboxes[:, 0:2] = rboxes[:, 0:2] - rboxes[:, 2:4] * 0.5 # 左上角
+        rboxes[:, 2:4] = rboxes[:, 0:2] + rboxes[:, 2:4]       # 右下角
     rboxes[:, 0:4] = rboxes[:, 0:4].astype(np.int32)
     return rboxes
 

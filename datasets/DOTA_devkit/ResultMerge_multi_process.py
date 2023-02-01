@@ -62,7 +62,6 @@ def py_cpu_nms_poly(dets, thresh):
 
 
 def py_cpu_nms_poly_fast(dets, thresh):
-
     obbs = dets[:, 0:-1]
     x1 = np.min(obbs[:, 0::2], axis=1)
     y1 = np.min(obbs[:, 1::2], axis=1)
@@ -231,12 +230,6 @@ def mergebase_parallel(srcpath, dstpath, nms):
     filelist = util.GetFileFromThisRootDir(srcpath)
 
     mergesingle_fn = partial(mergesingle, dstpath, nms)
-    
-    
-    # # ---------- DEBUG ----------
-    # mergesingle(dstpath, nms, filelist[0])
-    # # ---------- DEBUG ----------
-    
     # pdb.set_trace()
     pool.map(mergesingle_fn, filelist)
 
@@ -286,8 +279,8 @@ def ResultMerge(outputs,
     if not os.listdir(outputs):
         raise RuntimeError('No detection results founded in {} ! '.format(outputs))    
 
-    # util.detections2Task1(outputs, integrated_outputs) # 每个ID对应的标注分散到15个类里面
-    # mergebypoly(integrated_outputs, merged_outputs)
+    util.detections2Task1(outputs, integrated_outputs)
+    mergebypoly(integrated_outputs, merged_outputs)
     if dota_outputs is not None:
         if os.path.exists(dota_outputs):
             shutil.rmtree(dota_outputs)

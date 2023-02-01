@@ -4,10 +4,8 @@ import math
 import random
 import numpy as np
 import numpy.random as npr
-# import torch
-# import torchvision.transforms as transforms
-import paddle.vision.transforms as transforms
 import paddle
+import paddle.vision.transforms as transforms
 
 from utils.bbox import rbox_2_quad
 
@@ -17,26 +15,18 @@ def init_seeds(seed=0):
     np.random.seed(seed)
     paddle.seed(seed)
 
-    # Remove randomness (may be slower on Tesla GPUs) 
-    # https://pytorch.org/docs/stable/notes/randomness.html
+
+    # Remove randomness (may be slower on Tesla GPUs) # https://pytorch.org/docs/stable/notes/randomness.html
     if seed == 0:
-        # cuDNN对于同一操作有几种算法，一些算法结果是非确定性的，如卷积算法。
-        # 该flag用于调试。它表示是否选择cuDNN中的确定性函数。
-        flags = {
-            "FLAGS_cudnn_deterministic": True,
-            }
-        paddle.set_flags(flags)
+        # Paddle has NO backends.cudnn.benchmark(False)
+        # paddle.set_flags({'FLAGS_cudnn_deterministic': True})
+        os.environ['FLAGS_cudnn_deterministic'] = "True"
 
 
 def hyp_parse(hyp_path):
-    
-    """
-    将 hyp.py 文件解析
-    返回一个参数字典
-    """
     hyp = {}
     keys = [] 
-    with open(hyp_path,'r', encoding="utf-8") as f:
+    with open(hyp_path,'r') as f:
         for line in f:
             if line.startswith('#') or len(line.strip())==0 : continue
             v = line.strip().split(':')
@@ -49,16 +39,55 @@ def hyp_parse(hyp_path):
     return hyp
 
 
-def is_image(filename):
-    return any(filename.endswith(ext) for ext in [".bmp", ".png", ".jpg", ".jpeg", ".JPG"])
+def model_info(model, report='full'):
+    # Plots a line-by-line description of a PyTorch model
+    n_p = sum(x.numel() for x in model.parameters())  # number parameters
+    n_g = sum(x.numel() for x in model.parameters() if not x.stop_gradient)  # number gradients
+    if report is 'full':
+        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
+        for i, (name, p) in enumerate(model.named_parameters()):
+            name = name.replace('module_list.', '')
+            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+                  (i, name, not p.stop_gradient, p.numel(), list(p.shape), p.mean(), p.std()))
+    print('Model Summary: %g layers, %g parameters, %g gradients' % (len(list(model.parameters())), n_p, n_g))
 
 
-def draw_caption(image, box, caption):
-    b = np.array(box).astype(int)
-    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 2)
+def curriculum_factor(init, final, step=1, mode='suspend_cosine'):
+    if mode == 'cosine':
+        sequence = [(0.5 - 0.5 * math.cos(math.pi * i / final)) *  (final - init) + init \
+            for i in range(init, final+step, step)]
+
+    elif mode == 'suspend_cosine':
+        suspend_ratio = 0.1
+        suspend_interval = (final - init)*suspend_ratio
+        start = suspend_interval + init if suspend_interval > step else init  
+        sequence = [(0.5 - 0.5 * math.cos(math.pi * i / final)) *  (final - init) + init \
+             if i>start else init  for i in range(init, final+step, step)]
+    # vis 
+    import matplotlib.pylab as plt
+    import numpy as np
+    plt.scatter(np.array([x for x in range(init, final+step, step)]),np.array(sequence)) 
+    plt.show()
+
+
+def plot_gt(img, bboxes, im_path, mode='xyxyxyxy'):
+    if not os.path.exists('temp'):
+        os.mkdir('temp')
+    if mode == 'xywha':
+        bboxes = rbox_2_quad(bboxes,mode=mode)
+    if mode == 'xyxya':
+        bboxes = rbox_2_quad(bboxes,mode=mode)
+    for box in bboxes:
+        img = cv2.polylines(cv2.UMat(img),[box.reshape(-1,2).astype(np.int32)],True,(0,0,255),2)
+        cv2.imwrite(os.path.join('temp','augment_%s' % (os.path.split(im_path)[1])),img)
+    print('Check augmentation results in `temp` folder!!!')
+
+if __name__ == '__main__':
+    curriculum_factor(836, 6400, 32)
+
 
 def sort_corners(quads):
-    sorted_ = np.zeros(quads.shape, dtype=np.float32)
+    sorted = np.zeros(quads.shape, dtype=np.float32)
     for i, corners in enumerate(quads):
         corners = corners.reshape(4, 2)
         centers = np.mean(corners, axis=0)
@@ -91,84 +120,18 @@ def sort_corners(quads):
                 first_idx = 3
         for j in range(4):
             idx = (first_idx + j) % 4
-            sorted_[i, j*2] = corners[idx*2]
-            sorted_[i, j*2+1] = corners[idx*2+1]
-    return sorted_
+            sorted[i, j*2] = corners[idx*2]
+            sorted[i, j*2+1] = corners[idx*2+1]
+    return sorted
 
 
-def get_DOTA_points(label_path, rotate=False):
-    if not os.path.exists(label_path):
-        return []
-    with open(label_path,'r') as f:        
-        contents=f.read()
-        lines=contents.split('\n')
-        lines = [x for x in contents.split('\n')  if x]	 
-
-        object_coors=[]	
-        for object in lines:
-            coors = object.split(' ')
-            coors = [int(eval(x)) for x in coors[:-1]]
-            x0 = coors[0]; y0 = coors[1]; x1 = coors[2]; y1 = coors[3]
-            x2 = coors[4]; y2 = coors[5]; x3 = coors[6]; y3 = coors[7]
-            object_coors.append(np.array([x0,y0,x1,y1,x2,y2,x3,y3]).reshape(4,2).astype(np.int32))
-    return object_coors  
+def draw_caption(image, box, caption):
+    b = np.array(box).astype(int)
+    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 2)
 
 
-def show_dota_results(img_path, label_path):
-    save_path = 'dota_res'
-    if not os.path.exists(save_path):
-        os.mkdir(save_path)
-    merged_files = os.listdir(save_path)
-    func = get_DOTA_points
-    # for folder
-    if os.path.isdir(img_path) and os.path.isdir(label_path):
-        img_files = os.listdir(img_path)
-        xml_files = os.listdir(label_path)
-        img_files.sort()	
-        xml_files.sort()
-        
-        img_names = [os.path.splitext(x)[0] for x in img_files]
-        xml_names = [os.path.splitext(x)[0] for x in xml_files]
-        for img_name in img_names:
-            if img_name not in xml_names:
-                img_files.remove(img_name+'.png')
-        # import ipdb;ipdb.set_trace()
-        assert len(img_files) == len(xml_files), 'Not matched between imgs and res!'
-        iterations = zip(img_files,xml_files)
-        for iter in iterations:
-            if iter[0] in merged_files:
-                continue
-            assert os.path.splitext(iter[0])[0]==os.path.splitext(iter[1])[0],'unmatched images and labels!'   
-            # object_coors = get_yolo_points(os.path.join(label_path,iter[1]), rotate=True)
-            if not iter[0].endswith('.txt'):
-                object_coors = func(os.path.join(label_path,iter[1]),True)
-                if len(object_coors):
-                    drawbox(os.path.join(img_path,iter[0]),object_coors, save_path =save_path )
-                else:
-                    print('No obj!')
-    
-    # for single img
-    elif os.path.isfile(label_path):
-        object_coors = func(os.path.join(label_path),rotate=False)
-        if len(object_coors):
-            drawbox(img_path,object_coors,False)
-    else:
-        print('Path Not Matched!!!')
-
-
-def drawbox(img_path,object_coors,save_flag=True,save_path=None):
-    print(img_path)
-
-    img=cv2.imread(img_path,1)
-    for coor in object_coors:
-        img = cv2.polylines(img,[coor],True,(0,0,255),2)	
-        if save_flag:
-            cv2.imwrite(os.path.join(save_path,os.path.split(img_path)[1]), img)
-        else: 
-            cv2.imshow(img_path,img)
-            cv2.moveWindow(img_path,100,100)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+def is_image(filename):
+    return any(filename.endswith(ext) for ext in [".bmp", ".png", ".jpg", ".jpeg", ".JPG"])
 
 
 def rescale(im, target_size, max_size, keep_ratio, multiple=32):
@@ -215,51 +178,114 @@ class Rescale(object):
 
 
 class Normailize(object):
-    def __init__(self):
+    def __init__(self, div255=True, unsqueeze=False):
         # RGB: https://github.com/pytorch/vision/issues/223
+        self.div255 = div255
+        self.unsqueeze = unsqueeze
         self._transform = transforms.Compose([
-            transforms.ToTensor(),
+            # transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # 均值和方差
         ])
 
     def __call__(self, im):
+        if self.div255:
+            im = (im / 255).astype("float32")
         im = self._transform(im)
+        if self.unsqueeze:
+            return im[None]
         return im
 
 
 class Reshape(object):
     def __init__(self, unsqueeze=True):
         self._unsqueeze = unsqueeze
-        return
 
     def __call__(self, ims):
-        if not paddle.is_tensor(ims):
-            ims = paddle.to_tensor(ims.transpose((2, 0, 1)))
+        
+        # if not paddle.is_tensor(ims):
+        #     ims = paddle.to_tensor(ims.transpose((2, 0, 1)))
+        
+        ims = ims.transpose((2, 0, 1))
         if self._unsqueeze:
-            ims = ims.unsqueeze(0)
+            ims = ims[None]
         return ims
-    
-def plot_gt(img, bboxes, im_path, mode='xyxyxyxy'):
-    if not os.path.exists('temp'):
-        os.mkdir('temp')
-    if mode == 'xywha':
-        bboxes = rbox_2_quad(bboxes,mode=mode)
-    if mode == 'xyxya':
-        bboxes = rbox_2_quad(bboxes,mode=mode)
-    for box in bboxes:
-        img = cv2.polylines(cv2.UMat(img),[box.reshape(-1,2).astype(np.int32)],True,(0,0,255),2)
-        cv2.imwrite(os.path.join('temp','augment_%s' % (os.path.split(im_path)[1])),img)
-    print('Check augmentation results in `temp` folder!!!')
+
     
     
-def model_info(model, report='summary'):
-    # Plots a line-by-line description of a PyTorch model
-    n_p = sum(x.numel() for x in model.parameters())  # number parameters
-    n_g = sum(x.numel() for x in model.parameters() if not x.stop_gradient)  # number gradients
-    if report == 'full':
-        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
-        for i, (name, p) in enumerate(model.named_parameters()):
-            name = name.replace('module_list.', '')
-            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
-                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
-    print('Model Summary: %d layers, %d parameters, %d gradients' % (len(list(model.parameters())), n_p, n_g))
+ 
+
+###
+def show_dota_results(img_path,label_path):
+    save_path = 'dota_res'
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
+    merged_files = os.listdir(save_path)
+    func = get_DOTA_points
+    # for folder
+    if os.path.isdir(img_path) and os.path.isdir(label_path):
+        img_files = os.listdir(img_path)
+        xml_files = os.listdir(label_path)
+        img_files.sort()	
+        xml_files.sort()
+        
+        img_names = [os.path.splitext(x)[0] for x in img_files]
+        xml_names = [os.path.splitext(x)[0] for x in xml_files]
+        for img_name in img_names:
+            if img_name not in xml_names:
+                img_files.remove(img_name+'.png')
+#         import ipdb;ipdb.set_trace()
+        assert len(img_files) == len(xml_files), 'Not matched between imgs and res!'
+        iterations = zip(img_files,xml_files)
+        for iter in iterations:
+            if iter[0] in merged_files:
+                continue
+            assert os.path.splitext(iter[0])[0]==os.path.splitext(iter[1])[0],'unmatched images and labels!'   
+            # object_coors = get_yolo_points(os.path.join(label_path,iter[1]), rotate=True)
+            if not iter[0].endswith('.txt'):
+                object_coors = func(os.path.join(label_path,iter[1]),True)
+                if len(object_coors):
+                    drawbox(os.path.join(img_path,iter[0]),object_coors, save_path =save_path )
+                else:
+                    print('No obj!')
+    
+    # for single img
+    elif os.path.isfile(label_path):
+        object_coors = func(os.path.join(label_path),rotate=False)
+        if len(object_coors):
+            drawbox(img_path,object_coors,False)
+    else:
+        print('Path Not Matched!!!')
+
+
+def drawbox(img_path,object_coors,save_flag=True,save_path=None):
+    print(img_path)
+
+    img=cv2.imread(img_path,1)
+    for coor in object_coors:
+        img = cv2.polylines(img,[coor],True,(0,0,255),2)	
+        if save_flag:
+            cv2.imwrite(os.path.join(save_path,os.path.split(img_path)[1]), img)
+        else: 
+            cv2.imshow(img_path,img)
+            cv2.moveWindow(img_path,100,100)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+
+
+def get_DOTA_points(label_path, rotate=False):
+    if not os.path.exists(label_path):
+        return []
+    with open(label_path,'r') as f:        
+        contents=f.read()
+        lines=contents.split('\n')
+        lines = [x for x in contents.split('\n')  if x]	 
+
+        object_coors=[]	
+        for object in lines:
+            coors = object.split(' ')
+            coors = [int(eval(x)) for x in coors[:-1]]
+            x0 = coors[0]; y0 = coors[1]; x1 = coors[2]; y1 = coors[3]
+            x2 = coors[4]; y2 = coors[5]; x3 = coors[6]; y3 = coors[7]
+            object_coors.append(np.array([x0,y0,x1,y1,x2,y2,x3,y3]).reshape(4,2).astype(np.int32))
+    return object_coors  

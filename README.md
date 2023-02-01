@@ -4,8 +4,6 @@ This project hosts the official implementation for our AAAI 2021 paper:
 
 **Dynamic Anchor Learning for Arbitrary-Oriented Object Detection** [[arxiv](https://arxiv.org/abs/2012.04150)] [[comments](https://zhuanlan.zhihu.com/p/337272217)].
 
-本项目[原仓库](https://github.com/ming71/DAL)的Paddlepaddle实现版本
-
 ## Abstract
 
  In this paper, we propose a dynamic anchor learning (DAL) method, which utilizes the newly deﬁned matching degree to comprehensively evaluate the localization potential of the anchors and carry out a more efﬁcient label assignment process. In this way, the detector can dynamically select high-quality anchors to achieve accurate object detection, and the divergence between classiﬁcation and regression will be alleviated. 
@@ -18,16 +16,12 @@ The codes build Rotated RetinaNet with the proposed DAL method for rotation obje
 Insatll requirements:
 ```
 pip install -r requirements.txt
-pip install git+git://github.com/DrRyanHuang/paddle-warmup-lr
+pip install git+git://github.com/lehduong/torch-warmup-lr.git
 ```
 Build the Cython  and CUDA modules:
 ```
-cd $ROOT/utils/nms
-python3 setup.py build_ext --inplace
-
-cd $ROOT/utils/overlaps
-python3 setup.py build_ext --inplace
-
+cd $ROOT/utils
+sh make.sh
 cd $ROOT/utils/overlaps_cuda
 python setup.py build_ext --inplace
 ```
@@ -38,35 +32,6 @@ sudo apt-get install swig
 swig -c++ -python polyiou.i
 python setup.py build_ext --inplace
 ```
-
-### 注意
-- `paddle-warmup-lr`是我仿照`torch-warmup-lr`做的项目，我只是简单的测试了一下，如果有问题请留在 issue 里
-- `nms`和`overlaps`一般都可编译成功，如果在windows环境, `overlaps_cuda` 编译可能会出现问题，为了论文复现的速度，这里我不折腾了
-- swig 工具，linux环境不必多说，windows需要上官网下载一下`swig.exe`
-
-
-### 支持的数据集
-
-目前只支持DOTAv1数据集，需要自己写一个`train.txt`, 里面有所有的照片的**绝对**路径，不需要其标注的路径
-
-关于具体内容，请查看`DAL/datasets/dota_dataset.py`
-
-下载地址在这里：[https://captain-whu.github.io/DOTA/dataset.html](https://captain-whu.github.io/DOTA/dataset.html)
-
-温馨提示：
-
-`labelTxt-v1.0`文件夹中存放的是DOTA v1.0版本的标签信息，有`labelTxt`、`trainset_reclabelTxt`两个文件夹。`labelTxt`文件夹中存放的是obb（定向边界框）标签信息，`trainset_reclabelTxt`文件夹中存放的是hbb（水平边界框）标签信息。
-
-
-
-### DOTA数据集准备工作
-
-家人们，破大防了呀，第一次用这个DOTA数据集，原仓库的大佬神马都没说，代码全靠猜hhhh
-
-先把这个链接放上
-https://github.com/CAPTAIN-WHU/DOTA_devkit
-
-
 ### Inference
 You can use the following command to test a dataset. Note that `weight`, `img_dir`, `dataset`,`hyp` should be modified as appropriate.
 ```
@@ -113,9 +78,6 @@ Note that :
 | DAL    | NWPU VHR-10 | HBB  | ResNet-101 | 800 x 800  | 88.3   |
 | DAL    | VOC 2007    | HBB  | ResNet-101 | 800 x 800  | 76.1   |
 
-注意，这里的`DOTA`, 指的是`DOTA v1`:
-
-[https://github.com/ming71/DAL/issues/49](https://github.com/ming71/DAL/issues/49)
 
 ## Detections
 

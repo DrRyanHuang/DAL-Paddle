@@ -1,12 +1,15 @@
-import math
+
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import paddle
-import paddle.nn as nn
+import math
 import paddle.nn.functional as F
+from paddle import nn
+from .initializer import kaiming_uniform_, constant_
 
 
 def add_conv(in_ch, out_ch, ksize, stride, leaky=True):
     """
-    Add a Conv2D / batchnorm / leaky ReLU block.
+    Add a conv2d / batchnorm / leaky ReLU block.
     Args:
         in_ch (int): number of input channels of the convolution layer.
         out_ch (int): number of output channels of the convolution layer.
@@ -17,17 +20,14 @@ def add_conv(in_ch, out_ch, ksize, stride, leaky=True):
     """
     stage = nn.Sequential()
     pad = (ksize - 1) // 2
-    stage.add_sublayer('conv', nn.Conv2D(in_channels=in_ch,
-                                         out_channels=out_ch, 
-                                         kernel_size=ksize, 
-                                         stride=stride,
-                                         padding=pad, 
-                                         bias_attr=False))
-    stage.add_sublayer('batch_norm', nn.BatchNorm2D(out_ch))
+    stage.add_module('conv', nn.Conv2D(in_channels=in_ch,
+                                       out_channels=out_ch, kernel_size=ksize, stride=stride,
+                                       padding=pad, bias=False))
+    stage.add_module('batch_norm', nn.BatchNorm2D(out_ch))
     if leaky:
-        stage.add_sublayer('leaky', nn.LeakyReLU(0.1))
+        stage.add_module('leaky', nn.LeakyReLU(0.1))
     else:
-        stage.add_sublayer('relu6', nn.ReLU6())
+        stage.add_module('relu6', nn.ReLU6(inplace=True))
     return stage
 
 
@@ -47,7 +47,7 @@ class FPN(nn.Layer):
             in_channels_list (list[int]): number of channels for each feature map that
                 will be fed
             out_channels (int): number of channels of the FPN representation
-            top_blocks (nn.Module or None): if provided, an extra operation will
+            top_blocks (nn.Layer or None): if provided, an extra operation will
                 be performed on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list
         """
@@ -56,7 +56,6 @@ class FPN(nn.Layer):
         self.layer_blocks = []
         self.asff = use_asff
         for idx, in_channels in enumerate(in_channels_list, 1):
-            
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
 
@@ -68,7 +67,6 @@ class FPN(nn.Layer):
             self.add_sublayer(layer_block, layer_block_module)
             self.inner_blocks.append(inner_block)
             self.layer_blocks.append(layer_block)
-            
         self.top_blocks = top_blocks
 
     def forward(self, x):
@@ -119,18 +117,11 @@ class LastLevelP6P7(nn.Layer):
 
     def __init__(self, in_channels, out_channels):
         super(LastLevelP6P7, self).__init__()
-        
-        self.p6 = nn.Conv2D(in_channels, out_channels, 3, 2, 1, 
-                            weight_attr=nn.initializer.KaimingUniform(),
-                            bias_attr=nn.initializer.Constant(value=0))
-        self.p7 = nn.Conv2D(out_channels, out_channels, 3, 2, 1,
-                            weight_attr=nn.initializer.KaimingUniform(),
-                            bias_attr=nn.initializer.Constant(value=0))
-        
-        # for module in [self.p6, self.p7]:
-        #     nn.init.kaiming_uniform_(module.weight, a=1)
-        #     nn.init.constant_(module.bias, 0)
-            
+        self.p6 = nn.Conv2D(in_channels, out_channels, 3, 2, 1)
+        self.p7 = nn.Conv2D(out_channels, out_channels, 3, 2, 1)
+        for module in [self.p6, self.p7]:
+            kaiming_uniform_(module.weight, a=1)
+            constant_(module.bias, 0)
         self.use_P5 = in_channels == out_channels
 
     def forward(self, c5, p5):
@@ -141,17 +132,12 @@ class LastLevelP6P7(nn.Layer):
  
 
 
-class BasicConv2D(nn.Layer):
+class BasicConv2d(nn.Layer):
     def __init__(self, input_channels, output_channels, **kwargs):
         super().__init__()
-        self.conv = nn.Conv2D(input_channels, output_channels, bias_attr=False, **kwargs)
+        self.conv = nn.Conv2D(input_channels, output_channels, bias=False, **kwargs)
 
     def forward(self, x):
         x = self.conv(x)
 
         return x
-
-if __name__ == "__main__":
-    
-    add_conv(1, 1, 1, 1)
-    ll = LastLevelP6P7(3, 6)

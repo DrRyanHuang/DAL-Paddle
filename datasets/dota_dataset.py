@@ -2,15 +2,13 @@ import os
 import cv2
 import sys
 import numpy as np
-from paddle.io import Dataset
+import paddle
 
-from utils.augment import Augment, HSV, HorizontalFlip, VerticalFlip, \
-    Affine, Noise, Blur
-# from utils.utils import plot_gt
-from utils.bbox import mask_valid_boxes, quad_2_rbox
+from utils.augment import *
+from utils.utils import plot_gt
+from utils.bbox import quad_2_rbox 
 
-
-class DOTADataset(Dataset):
+class DOTADataset(paddle.io.Dataset):
 
     def __init__(self,
                  dataset= None,  
@@ -77,11 +75,7 @@ class DOTADataset(Dataset):
 
 
     def _load_annotation(self, index):
-
-        # 注意这里如果是windows, 则可能有bug
-        # root_dir = index.split('/images/P')[0]
-        root_dir = index.split('\\images\\P')[0]
-
+        root_dir = index.split('/images/P')[0]
         label_dir = os.path.join(root_dir, 'labelTxt')
         _ , img_name = os.path.split(index)
         filename = os.path.join(label_dir, img_name[:-4]+'.txt')
@@ -116,7 +110,6 @@ class DOTADataset(Dataset):
         
 if __name__ == '__main__':
     pass
-
 
 
 

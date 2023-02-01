@@ -1,11 +1,8 @@
 from __future__ import print_function
 
 import numpy as np
-# import torch
-# import torch.nn as nn
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 
 
 class Anchors(nn.Layer):
@@ -54,11 +51,6 @@ class Anchors(nn.Layer):
         all_anchors = np.expand_dims(all_anchors, axis=0)
         all_anchors = np.tile(all_anchors, (ims.shape[0], 1, 1))
         all_anchors = paddle.to_tensor(all_anchors.astype(np.float32))
-        
-        # Paddle 默认在 GPU 上
-        # if paddle.is_tensor(ims) and ims.is_cuda:
-        #     all_anchors = all_anchors.cuda()
-            
         return all_anchors
 
 
@@ -75,10 +67,10 @@ def generate_anchors(base_size, ratios, scales, rotations):
     # compute areas of anchors
     areas = anchors[:, 2] * anchors[:, 3]
     # correct for ratios
-    anchors[:, 2] = np.sqrt(areas / np.repeat(ratios, len(scales) * len(rotations)))
-    anchors[:, 3] = anchors[:, 2] * np.repeat(ratios, len(scales) * len(rotations))
+    anchors[:, 2] = np.sqrt(areas / np.tile(ratios, len(scales) * len(rotations)))
+    anchors[:, 3] = anchors[:, 2] * np.tile(ratios, len(scales) * len(rotations))
     # add rotations
-    anchors[:, 4] = np.tile(np.repeat(rotations, len(scales)), (1, len(ratios))).T[:, 0]
+    anchors[:, 4] = np.tile(np.tile(rotations, len(scales)), (1, len(ratios))).T[:, 0]
     # transform from (x_ctr, y_ctr, w, h) -> (x1, y1, x2, y2)
     anchors[:, 0:3:2] -= np.tile(anchors[:, 2] * 0.5, (2, 1)).T
     anchors[:, 1:4:2] -= np.tile(anchors[:, 3] * 0.5, (2, 1)).T

@@ -3,13 +3,12 @@ from __future__ import print_function
 import os
 import cv2
 import time
-# import torch
 import paddle
 import random
 import shutil
 import argparse
 import numpy as np
-from datasets import DOTADataset
+from datasets import *
 from models.model import RetinaNet
 from utils.detect import im_detect
 from utils.bbox import rbox_2_quad
@@ -18,27 +17,26 @@ from utils.utils import show_dota_results
 from eval import evaluate
 from datasets.DOTA_devkit.ResultMerge_multi_process import ResultMerge
 
-DATASETS = {
-    # 'VOC' : VOCDataset ,
-    # 'IC15': IC15Dataset,
-    # 'IC13': IC13Dataset,
-    # 'HRSC2016': HRSCDataset,
-    'DOTA':DOTADataset,
-    # 'UCAS_AOD':UCAS_AODDataset,
-    # 'NWPU_VHR':NWPUDataset
-}
+DATASETS = {'VOC' : VOCDataset ,
+            'IC15': IC15Dataset,
+            'IC13': IC13Dataset,
+            'HRSC2016': HRSCDataset,
+            'DOTA':DOTADataset,
+            'UCAS_AOD':UCAS_AODDataset,
+            'NWPU_VHR':NWPUDataset
+            }
 
 def demo(args):
     hyps = hyp_parse(args.hyp)
     ds = DATASETS[args.dataset](level = 1)
     model = RetinaNet(backbone=args.backbone, hyps=hyps)
-    if args.weight.endswith('.pdparams'):
+    if args.weight.endswith('.pth'):
         chkpt = paddle.load(args.weight)
         # load model
         if 'model' in chkpt.keys():
-            model.set_state_dict(chkpt['model'])
+            model.load_state_dict(chkpt['model'])
         else:
-            model.set_state_dict(chkpt)
+            model.load_state_dict(chkpt)
         print('load weight from: {}'.format(args.weight))
     model.eval()
 
@@ -114,18 +112,17 @@ def demo(args):
         label_path = 'outputs/dota_out'
         save_imgs =  False
         if save_imgs:
-            show_dota_results(img_path, label_path)
+            show_dota_results(img_path,label_path)
     print('Done. (%.3fs)' % (time.time() - t0))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparams')
     parser.add_argument('--backbone', type=str, default='res50')
     parser.add_argument('--hyp', type=str, default='hyp.py', help='hyper-parameter path')
-    # parser.add_argument('--weight', type=str, default='weights/last.pth')
-    parser.add_argument('--weight', type=str, default='weights/last.pdparams')
+    parser.add_argument('--weight', type=str, default='weights/last.pth')
 
-    parser.add_argument('--dataset', type=str, default='DOTA')
-    parser.add_argument('--ims_dir', type=str, default='')   
+    parser.add_argument('--dataset', type=str, default='HRSC2016')
+    parser.add_argument('--ims_dir', type=str, default='samples')   
     
     parser.add_argument('--target_size', type=int, default=[800])
     demo(parser.parse_args())

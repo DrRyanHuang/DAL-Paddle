@@ -1,7 +1,6 @@
 import paddle
 import paddle.nn as nn
 import paddle.vision.models as models
-
 import math
 import cv2
 import os
@@ -12,7 +11,6 @@ from models.fpn import FPN, LastLevelP6P7
 from models.heads import CLSHead, REGHead #, MultiHead
 from models.anchors import Anchors
 from models.losses import IntegratedLoss #, KLLoss
-from models.losses import fuck_paddle_idx, boolidx2tensor
 
 from utils.nms_wrapper import nms
 from utils.box_coder import BoxCoder
@@ -21,11 +19,11 @@ from utils.utils import hyp_parse
 
 
 class RetinaNet(nn.Layer):
-    def __init__(self,backbone='res50',hyps=None):
+    def __init__(self,backbone='res50', hyps=None):
         super(RetinaNet, self).__init__()
         self.num_classes  = int(hyps['num_classes']) + 1
         self.anchor_generator = Anchors(
-            ratios = np.array([0.5,1,2]),
+            ratios = np.array([0.5, 1, 2]),
         ) 
         self.num_anchors = self.anchor_generator.num_anchors
         self.init_backbone(backbone)
@@ -77,19 +75,14 @@ class RetinaNet(nn.Layer):
 
     def ims_2_features(self, ims):
         c1 = self.backbone.relu(self.backbone.bn1(self.backbone.conv1(ims)))
-        # print(c1.shape)
         c2 = self.backbone.layer1(self.backbone.maxpool(c1))
-        # print(c2.shape)
         c3 = self.backbone.layer2(c2)
-        # print(c3.shape)
         c4 = self.backbone.layer3(c3)
-        # print(c4.shape)
         c5 = self.backbone.layer4(c4)
-        # print(c5.shape)
         #c_i shape: bs,C,H,W
         return [c3, c4, c5]
 
-    def forward(self, ims, gt_boxes=None, test_conf=None, process=None):
+    def forward(self, ims, gt_boxes=None, test_conf=None,process=None):
         anchors_list, offsets_list, cls_list, var_list = [], [], [], []
         original_anchors = self.anchor_generator(ims)   # (bs, num_all_achors, 5)
         anchors_list.append(original_anchors)
@@ -108,57 +101,49 @@ class RetinaNet(nn.Layer):
             return losses
 
         else:   # eval() mode
-            test_conf = 0.99
             return self.decoder(ims, anchors_list[-1], cls_score, bbox_pred, test_conf=test_conf)
 
 
     def decoder(self, ims, anchors, cls_score, bbox_pred, thresh=0.6, nms_thresh=0.2, test_conf=None):
         if test_conf is not None:
             thresh = test_conf
-            
         bboxes = self.box_coder.decode(anchors, bbox_pred, mode='xywht')
         bboxes = clip_boxes(bboxes, ims)
         scores = paddle.max(cls_score, axis=2, keepdim=True)
         keep = (scores >= thresh)[0, :, 0]
         if keep.sum() == 0:
-            return [paddle.zeros((1,)), paddle.zeros((1,)), paddle.zeros((1, 5))]
-        keep = boolidx2tensor(keep)
+            return [paddle.zeros([1]), paddle.zeros([1]), paddle.zeros([1, 5])]
         
-        # scores = scores[:, keep]
-        # anchors = anchors[:, keep]
-        # cls_score = cls_score[:, keep]
-        # bboxes = bboxes[:, keep]
+        keep = paddle.where(keep)[0].flatten()
         
-        scores = paddle.index_select(x=scores, index=keep, axis=1)
-        anchors = paddle.index_select(x=anchors, index=keep, axis=1)
-        cls_score = paddle.index_select(x=cls_score, index=keep, axis=1)
-        bboxes = paddle.index_select(x=bboxes, index=keep, axis=1)
+        # scores = scores[:, keep, :]
+        # anchors = anchors[:, keep, :]
+        # cls_score = cls_score[:, keep, :]
+        # bboxes = bboxes[:, keep, :]
         
+        scores = paddle.index_select(scores, keep, axis=1)
+        anchors = paddle.index_select(anchors, keep, axis=1)
+        cls_score = paddle.index_select(cls_score, keep, axis=1)
+        bboxes = paddle.index_select(bboxes, keep, axis=1)
         
         # NMS
         anchors_nms_idx = nms(paddle.concat([bboxes, scores], axis=2)[0, :, :], nms_thresh)
-        anchors_nms_idx = paddle.to_tensor(anchors_nms_idx)
+        nms_scores = cls_score[0][anchors_nms_idx].max(axis=1)
+        nms_class = cls_score[0][anchors_nms_idx].argmax(axis=1)
         
-        res_cls_score = paddle.index_select(x=cls_score, index=anchors_nms_idx, axis=1)[0]
-        
-        # nms_scores, nms_class = cls_score[0, anchors_nms_idx].max(dim=1)
-        nms_scores, nms_class = res_cls_score.max(1),  res_cls_score.argmax(1)
         output_boxes = paddle.concat([
-            # bboxes[0, anchors_nms_idx, :],
-            # anchors[0, anchors_nms_idx, :]],
-            paddle.index_select(x=bboxes,  index=anchors_nms_idx, axis=1)[0],
-            paddle.index_select(x=anchors, index=anchors_nms_idx, axis=1)[0],
-            ],
+            bboxes[0][anchors_nms_idx],
+            anchors[0][anchors_nms_idx]],
             axis=1
         )
         return [nms_scores, nms_class, output_boxes]
 
     def freeze_bn(self):
         for layer in self.modules():
-            if isinstance(layer, nn.BatchNorm2d):
+            if isinstance(layer, nn.BatchNorm2D):
                 layer.eval()
 
-    def calc_mining_param(self, process, alpha):
+    def calc_mining_param(self, process,alpha):
         if process < 0.1:
             bf_weight = 1.0
         elif  process > 0.3:

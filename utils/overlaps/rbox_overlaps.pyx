@@ -52,9 +52,9 @@ def rbox_overlaps(
             )
             if rtn == 1:
                 ia = np.round(np.abs(cv2.contourArea(contours)))
-                overlaps[n, k] = ia / (ua - ia)
+                overlaps[n, k] = ia / (ua - ia + 10e-5)
             elif rtn == 2:
                 ia = np.minimum(ua - box_area, box_area)
-                overlaps[n, k] = ia / (ua - ia)
+                overlaps[n, k] = ia / (ua - ia + 10e-5)
     return overlaps
 

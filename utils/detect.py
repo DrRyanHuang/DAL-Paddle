@@ -1,7 +1,7 @@
 import numpy as np
-# import torch
 import paddle
-from paddle.vision.transforms import Compose
+
+from paddle.vision.transforms import Compose, ToTensor
 
 from utils.utils import Rescale, Normailize, Reshape
 from utils.nms_wrapper import nms
@@ -31,9 +31,8 @@ def im_detect(model, src, target_sizes, use_gpu=True, conf=None):
 
 def single_scale_detect(model, src, target_size, use_gpu=True, conf=None):
     im, im_scales = Rescale(target_size=target_size, keep_ratio=True)(src)
-    im = Compose([Normailize(), Reshape(unsqueeze=True)])(im)
-    # if use_gpu and torch.cuda.is_available():
-    #     model, im = model.cuda(), im.cuda()
+    im = Compose([ToTensor(data_format="CHW"), Normailize(div255=False, unsqueeze=True)])(im)
+    
     with paddle.no_grad():
         scores, classes, boxes = model(im, test_conf = conf)
     scores = scores.cpu().numpy()
